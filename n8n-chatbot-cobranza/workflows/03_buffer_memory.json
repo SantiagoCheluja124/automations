@@ -1,0 +1,256 @@
+{
+  "name": "buffer_memory",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "514bff3e-b762-454d-a707-602e6598bcc9",
+      "name": "Start Buffer",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -976,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 7
+      },
+      "id": "5b5b27fc-d0ac-497b-9715-a73331367eea",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -624,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=buffer:wa:{{ $('Start Buffer').item.json.sender_id }}",
+        "keyType": "list",
+        "options": {}
+      },
+      "id": "f92d3460-248f-4e45-902b-d3dbb4a73708",
+      "name": "Get After Data",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "=={{ JSON.parse($('Get After Data').item.json.propertyName[$('Get After Data').item.json.propertyName.length - 1]).message_id }}",
+              "rightValue": "=={{ $('Start Buffer').item.json.message_id }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "91bdcded-2c43-4aaa-ac6c-4afc104dd919",
+      "name": "Soy el ultimo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=buffer:wa:{{ $('Start Buffer').item.json.sender_id }}"
+      },
+      "id": "f19dc4aa-af5f-4226-8795-d9a0daf18f2e",
+      "name": "Delete Buffer",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========================================\n// CONSOLIDAR MENSAJES DEL BUFFER\n// ========================================\n// Toma todos los mensajes acumulados en Redis\n// y los concatena para pasarlos al orquestador\n// ========================================\n\nconst originalData = $('Start Buffer').item.json;\nconst bufferData = $('Get After Data').item.json;\n\n// La lista viene en propertyName como array de strings JSON\nconst rawMessages = bufferData.propertyName || [];\n\n// Parsear cada mensaje stringificado\nconst messages = rawMessages.map(raw => {\n  try {\n    return typeof raw === 'string' ? JSON.parse(raw) : raw;\n  } catch (e) {\n    return { message: String(raw), parse_error: true };\n  }\n});\n\n// Concatenar todos los textos con separador\nconst consolidatedMessage = messages\n  .map(m => m.message || '')\n  .filter(m => m.length > 0)\n  .join(' ');\n\n// Consolidar attachments de todos los mensajes\nconst allAttachments = messages.flatMap(m => m.attachments || []);\nconst hasImage = allAttachments.some(a => a.file_type === 'image');\n\n// Devolver el paquete completo para el siguiente workflow\nreturn {\n  json: {\n    // === IDENTIFICACIÓN DEL CLIENTE ===\n    sender_id: originalData.sender_id,\n    sender_name: originalData.sender_name,\n    user_identifier: originalData.user_identifier,\n    phone_number: originalData.phone_number,\n\n    // === IDENTIFICACIÓN DE LA CONVERSACIÓN ===\n    conversation_id: originalData.conversation_id,\n    account_id: originalData.account_id,\n    inbox_id: originalData.inbox_id,\n\n    // === MENSAJE CONSOLIDADO ===\n    message: consolidatedMessage,\n    message_count: messages.length,\n    messages_history: messages,\n\n    // === CONTEXTO DE CONVERSACIÓN ===\n    historial: originalData.historial,\n    total_mensajes: originalData.total_mensajes,\n\n    // === METADATA ===\n    last_message_id: originalData.message_id,\n    last_timestamp: originalData.timestamp,\n    consolidated_at: new Date().toISOString(),\n    from_buffer: true\n  }\n};\n"
+      },
+      "id": "4339e691-cb0e-458f-98bd-8219d3ee0234",
+      "name": "Consolidar Mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1f1ef016-ba6c-480e-9f41-2e574b8d2fd9",
+      "name": "Not Send Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        128,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "=buffer:wa:{{ $json.sender_id }}",
+        "messageData": "={{ JSON.stringify({ message: $json.message, message_id: $json.message_id, timestamp: $json.timestamp, message_type: $json.message_type, sender_name: $json.sender_name, received_at: $json.received_at })}}",
+        "tail": true
+      },
+      "id": "efd7c612-a128-41e4-84ae-e7459a71c6b8",
+      "name": "Add Messages",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "hJqYAkpGfWm4flMx",
+          "cachedResultUrl": "/workflow/hJqYAkpGfWm4flMx",
+          "cachedResultName": "agente_orquestador"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        0
+      ],
+      "id": "c6776fa0-e29c-4e81-b2b3-ddef17c9689d",
+      "name": "Call 'agente_orquestador'"
+    }
+  ],
+  "connections": {
+    "Start Buffer": {
+      "main": [
+        [
+          {
+            "node": "Add Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get After Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get After Data": {
+      "main": [
+        [
+          {
+            "node": "Soy el ultimo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Soy el ultimo?": {
+      "main": [
+        [
+          {
+            "node": "Delete Buffer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Buffer": {
+      "main": [
+        [
+          {
+            "node": "Consolidar Mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Messages": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar Mensajes": {
+      "main": [
+        [
+          {
+            "node": "Call 'agente_orquestador'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "lykh8TS8kjCU5u6b",
+  "active": false
+}

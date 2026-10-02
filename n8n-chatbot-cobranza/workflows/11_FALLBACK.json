@@ -1,0 +1,110 @@
+{
+  "name": "FALLBACK",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "=Disculpa, no entendí bien tu mensaje. ¿Podrías explicarme con más \ndetalle qué necesitas?\""
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        80
+      ],
+      "id": "c9841896-53a3-4183-80a5-4673e96aca4e",
+      "name": "enviar_respuesta_directa"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "contact_id",
+              "type": "number"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        80
+      ],
+      "id": "3189445a-e6f6-455d-bfca-6a43077658d5",
+      "name": "Webhook"
+    }
+  ],
+  "connections": {
+    "enviar_respuesta_directa": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "enviar_respuesta_directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "YT5eH69V30RtWWHw",
+  "active": false
+}

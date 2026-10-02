@@ -1,0 +1,197 @@
+{
+  "name": "UNSAFE",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "=Lo siento, no puedo ayudarte con esa solicitud. Si necesitas \ninformación sobre tu préstamo, con gusto te asisto."
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1296,
+        192
+      ],
+      "id": "811a190a-c57f-461e-9cdd-f9b41ff87a71",
+      "name": "enviar_respuesta_directa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assignee_id",
+              "value": "={{ $json.assignee_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -896,
+        192
+      ],
+      "id": "f5811482-27de-480f-8e55-d6cdf8a4a470",
+      "name": "asignar a un agente"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agentes y sus pesos (mismos que en Python)\nconst agents = [1, 4, 6, 5];\nconst weights = [0.34, 0.01, 0.40, 0.25];\n\n// Selección por peso acumulado\nconst total = weights.reduce((a, b) => a + b, 0);\nlet r = Math.random() * total;\nlet selected = agents[agents.length - 1];\n\nfor (let i = 0; i < agents.length; i++) {\n  r -= weights[i];\n  if (r <= 0) {\n    selected = agents[i];\n    break;\n  }\n}\n\nreturn [{ json: { assignee_id: selected } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        192
+      ],
+      "id": "7e954654-fe1a-4955-910b-404a9cae1ff0",
+      "name": "code_asignar usuario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"pending\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -688,
+        192
+      ],
+      "id": "8d9750b1-0181-462b-84b8-1b2434e5e045",
+      "name": "pending_conversacion_chatwoot1"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "contact_id",
+              "type": "number"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1488,
+        192
+      ],
+      "id": "bc6c6308-9660-4261-acc5-b1233dce8055",
+      "name": "Webhook"
+    }
+  ],
+  "connections": {
+    "enviar_respuesta_directa": {
+      "main": [
+        [
+          {
+            "node": "code_asignar usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "asignar a un agente": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code_asignar usuario": {
+      "main": [
+        [
+          {
+            "node": "asignar a un agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "enviar_respuesta_directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "2ks5SFStJg5urX62",
+  "active": false
+}

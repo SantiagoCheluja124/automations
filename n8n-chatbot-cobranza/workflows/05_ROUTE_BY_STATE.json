@@ -1,0 +1,1355 @@
+{
+  "name": "ROUTE_BY_STATE",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with\n            contact_users as (\n                select\n                    u.id as user_id,\n                    upper(u.curp) as curp,\n                    upper(u.first_name) as first_name,\n                    upper(u.middle_name) as middle_name,\n                    upper(u.last_name_1) as last_name_1,\n                    upper(u.last_name_2) as last_name_2,\n                    u.primary_phone_number,\n                    lower(u.primary_email) as primary_email\n                from\n                    users as u\n                where\n                    primary_phone_number = REPLACE('{{$('Webhook').item.json.phone_number }}', '+521', '+52')\n            ),\n            last_application_id as (\n                select\n                    a.user_id,\n                    a.id as application_id,\n                    date(a.created_at at time zone 'cst') as application_date,\n                    a.application_type,\n                    a.credit_check_status,\n                    a.verification_status,\n                    a.process_status,\n                    'completed' as user_clabe_status,\n                    (CASE WHEN a.signature IS NOT NULL THEN 1 ELSE 0 END)::INT AS signature,\n                    row_number() over (partition by a.user_id order by a.created_at desc) as rn\n                from\n                    applications as a\n                inner join\n                    contact_users as cu on a.user_id = cu.user_id\n            ),\n            last_clabe_payprovider as (\n                select\n                    ac.user_id,\n                    ac.clabe,\n                    row_number() over (partition by ac.user_id order by ac.created_at desc) as rn\n                from\n                    payprovider_customers as ac\n                inner join\n                    contact_users as cu on ac.user_id = cu.user_id\n            ),\n            last_loan_id as (\n                select\n                    l.user_id,\n                    l.id as loan_id,\n                    date(l.created_at at time zone 'cst') as loan_date,\n                    l.loan_status,\n                    lsp.skip_payment_counter,\n                    lsp.skip_payment_limit,\n                    ld.disbursal_date,\n                    ld.payprovider_metadata ->>'url' as cep_url,\n                    case when ld.disbursal_status = 'SENT' THEN 'sent' when ld.disbursal_status is null then 'to be disbursed' else 'failed' end as disbursal_status,\n                    row_number() over (partition by l.user_id order by l.created_at desc, ld.updated_at desc) as rn\n                from\n                    loans as l\n                left join\n                    loan_skip_payments as lsp on l.id = lsp.loan_id\n                left join\n                    loan_disbursals as ld on l.id = ld.loan_id and ld.disbursal_type = 'ONLINE'\n                inner join\n                    contact_users as cu on l.user_id = cu.user_id\n\n                where l.loan_status not in ('CANCELED', 'TESTING')\n            )\n        select\n            cu.*,\n            lai.application_id,\n            to_char(lai.application_date, 'YYYY-MM-DD') as application_date,\n            lai.application_type,\n            lai.credit_check_status,\n            lai.verification_status,\n            lai.process_status,\n            lai.user_clabe_status,\n            --lli.loan_id,\n            null as loan_id,\n            lli.loan_status,\n            to_char(lli.disbursal_date, 'YYYY-MM-DD') as disbursal_date,\n            lli.cep_url,\n            lli.disbursal_status,\n            lca.clabe as user_clabe,\n            lli.skip_payment_counter,\n            lli.skip_payment_limit,\n            lai.signature\n            ,lm.loan_number\n            ,lm.is_paid_off\n\n        from\n            contact_users as cu\n        left join   \n            last_application_id as lai on cu.user_id = lai.user_id and lai.rn = 1\n        left join\n            last_clabe_payprovider as lca on cu.user_id = lca.user_id and lca.rn = 1\n        left join\n            last_loan_id as lli on cu.user_id = lli.user_id and lli.rn = 1\n        left join \n        \tloan_master as lm on lm.loan_id = lli.loan_id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -432,
+        112
+      ],
+      "id": "1eb31a1a-3db3-4ba9-9a41-bda5987f03a6",
+      "name": "get_info_usuario_db",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route_type }}",
+                    "rightValue": "ACTIVE_LOAN",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9657a121-010f-4158-aaf0-a82fbfcb2e3a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "active_loan"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "030aadf7-27d5-42db-92e4-f82482ad0683",
+                    "leftValue": "={{ $json.route_type }}",
+                    "rightValue": "PAID_OFF",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "paid_off"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4fbf28df-e13e-4395-8fc5-ef195034b8d4",
+                    "leftValue": "={{ $json.route_type }}",
+                    "rightValue": "WAITING_DISBURSAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "waiting_disbursal"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "82b23376-d885-4da0-9104-6b01062a7870",
+                    "leftValue": "={{ $json.route_type }}",
+                    "rightValue": "IN_APPLICATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "in_application"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "afcb048b-5547-4494-b93f-8e0b91067547",
+                    "leftValue": "={{ ['FAILED_DISBURSAL', 'UNKNOWN_USER', 'OTHER'].includes($json.route_type) ? 'SI' : 'NO' }}",
+                    "rightValue": "SI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "escalar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "128a7b5d-ec93-4260-b796-34aa6292d7b3",
+                    "leftValue": "={{ $json.route_type }}",
+                    "rightValue": "REJECTED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "REJECTED"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        48
+      ],
+      "id": "a02bf3c4-3cc1-40fa-bc88-0c61209070c9",
+      "name": "Switch_ruta"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lee la info del usuario que vino de get_info_usuario_db\nconst user = $('get_info_usuario_db').item.json;\n\nlet routeType;\nlet escalateToHuman = false;\n\n// Clasificación por loan_status (ver imagen de totales)\nif (!user.user_id) {\n  // Cliente que no existe en la DB de FinDemo\n  routeType = 'UNKNOWN_USER';\n\n} else if (user.loan_status === 'DISBURSED' || user.loan_status === 'REFINANCE') {\n  // Préstamo activo → va al warehouse por datos de cobranza\n  routeType = 'ACTIVE_LOAN';\n\n} else if (user.loan_status === 'PAID_OFF' || user.is_paid_off === 1) {\n  // Ya pagó → va a producción por la oferta de renovación\n  routeType = 'PAID_OFF';\n\n} else if (user.loan_status === 'WAITING_FOR_DISBURSAL') {\n  // Firmó contrato, esperando dispersión\n  routeType = 'WAITING_DISBURSAL';\n\n} else if (user.loan_status === 'FAILED_DISBURSAL') {\n  // Dispersión falló → siempre escalar\n  routeType = 'FAILED_DISBURSAL';\n  escalateToHuman = true;\n\n} else if (user.credit_check_status === 'REJECTED' || user.verification_status === 'REJECTED') {\n  // Cliente rechazado → rama dedicada\n  // El bot decide: respuesta automática de status vs ofrecer préstamo en garantía\n  routeType = 'REJECTED';\n  \n} else if (user.application_type && !user.loan_status) {\n  // Está en proceso de aplicación, aún no hay loan\n  routeType = 'IN_APPLICATION';\n\n} else {\n  // Cualquier otro caso no contemplado\n  routeType = 'OTHER';\n}\n\n// Contexto básico que siempre se pasa (útil para todas las ramas)\nconst baseContext = {\n  user_id: user.user_id || null,\n  first_name: user.first_name || null,\n  full_name: [user.first_name, user.middle_name, user.last_name_1, user.last_name_2]\n    .filter(Boolean).join(' ') || null,\n  primary_email: user.primary_email || null,\n  curp: user.curp || null,\n  // Estado de la aplicación\n  application_id: user.application_id || null,\n  application_type: user.application_type || null,\n  application_date: user.application_date || null,\n  credit_check_status: user.credit_check_status || null,\n  verification_status: user.verification_status || null,\n  process_status: user.process_status || null,\n  signature: user.signature !== null && user.signature !== undefined ? user.signature : null,\n  // Estado del loan\n  loan_id: user.loan_id || null,\n  loan_status: user.loan_status || null,\n  loan_number: user.loan_number || null,\n  is_paid_off: user.is_paid_off || null,\n  // Datos de dispersión\n  disbursal_date: user.disbursal_date || null,\n  disbursal_status: user.disbursal_status || null,\n  cep_url: user.cep_url || null,\n  // CLABE\n  user_clabe: user.user_clabe || null,\n  // Skip payments (básico, el detalle viene del warehouse en ACTIVE_LOAN)\n  skip_payment_counter: user.skip_payment_counter || null,\n  skip_payment_limit: user.skip_payment_limit || null\n};\n\nreturn [{\n  json: {\n    route_type: routeType,\n    escalate_to_human: escalateToHuman,\n    needs_daily_query: routeType === 'ACTIVE_LOAN',\n    needs_offer_query: routeType === 'PAID_OFF',\n    base_context: baseContext\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ],
+      "id": "75710cfc-3dba-47db-942c-46a2c809734e",
+      "name": "router_cliente"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "04fc0019-1522-4a6a-906a-cd85a108f573",
+              "name": "route_type",
+              "value": "WAITING_DISBURSAL",
+              "type": "string"
+            },
+            {
+              "id": "46f44d9c-ccb2-4a16-a55d-9a7767091d3b",
+              "name": "daily_available",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "bc8ca269-b027-408c-9b16-51c49d69bb73",
+              "name": "should_escalate",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "356f43d8-73d8-46ba-af12-8d1203c806c4",
+              "name": "base_context",
+              "value": "={{ $('router_cliente').item.json.base_context }}",
+              "type": "object"
+            },
+            {
+              "id": "2618ad88-2b0a-47c2-89cf-a8ba05209630",
+              "name": "context_block",
+              "value": "=CONTEXTO DEL CLIENTE (contrato firmado, esperando dispersión)\nIdentidad:\n- Nombre: {{ $('router_cliente').item.json.base_context.first_name || 'no disponible' }}\n- User ID: {{ $node[\"get_info_usuario_db\"].json[\"user_id\"] }}\n- Email: {{ $('router_cliente').item.json.base_context.primary_email || 'no disponible' }}\nEstado de la solicitud:\n- Tipo de préstamo: {{ $('router_cliente').item.json.base_context.application_type || 'n/a' }}\n- Credit check: {{ $('router_cliente').item.json.base_context.credit_check_status }}\n- Verificación: {{ $('router_cliente').item.json.base_context.verification_status }}\n- Firma de contrato: {{ $('router_cliente').item.json.base_context.signature ? 'firmado' : 'pendiente' }}\n- Número de préstamo: {{ $('router_cliente').item.json.base_context.loan_number || 'n/a' }}\nIMPORTANTE: Este cliente ya firmó su contrato y está esperando que se disperse el dinero a su cuenta.\nTiempos estándar de dispersión:\n- Entre 2 y 8 horas después de firmar el contrato\n- Aplica de lunes a sábado\n- Los domingos no hay dispersiones\nSi pregunta cuándo llega su dinero, explica los tiempos. Si ya pasaron más de 8 horas en horario hábil y no ha llegado, transfiere a un agente humano para revisar el estatus de la dispersión.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        32
+      ],
+      "id": "b366e7a6-2d58-4a59-ad0e-cf904df6a2c3",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "04fc0019-1522-4a6a-906a-cd85a108f573",
+              "name": "route_type",
+              "value": "IN_APPLICATION",
+              "type": "string"
+            },
+            {
+              "id": "46f44d9c-ccb2-4a16-a55d-9a7767091d3b",
+              "name": "daily_available",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "bc8ca269-b027-408c-9b16-51c49d69bb73",
+              "name": "should_escalate",
+              "value": "={{ $('router_cliente').item.json.base_context.credit_check_status === 'REJECTED' || $('router_cliente').item.json.base_context.verification_status === 'REJECTED' }}",
+              "type": "boolean"
+            },
+            {
+              "id": "356f43d8-73d8-46ba-af12-8d1203c806c4",
+              "name": "base_context",
+              "value": "={{ $('router_cliente').item.json.base_context }}",
+              "type": "object"
+            },
+            {
+              "id": "2618ad88-2b0a-47c2-89cf-a8ba05209630",
+              "name": "context_block",
+              "value": "={{ (() => {\n  const b = $('router_cliente').item.json.base_context;\n  let nextStep = '';\n  if (b.credit_check_status === 'PENDING') {\n    nextStep = 'Necesita completar la revisión de crédito en su app FinDemo.';\n  } else if (b.credit_check_status === 'REJECTED') {\n    nextStep = 'Su solicitud fue rechazada. Puede volver a aplicar en 3 meses.';\n  } else if (b.credit_check_status === 'APPROVED') {\n    if (b.verification_status === 'PENDING') {\n      nextStep = 'Tiene pendiente subir su selfie y fotos de su INE (frente y reverso) en la app.';\n    } else if (b.verification_status === 'REJECTED') {\n      nextStep = 'Sus datos no pasaron la validación. No puede continuar con el proceso.';\n    } else if (b.verification_status === 'APPROVED' || b.verification_status === 'PRE_APPROVED') {\n      nextStep = !b.signature\n        ? 'Tiene pendiente firmar su contrato digital en la app.'\n        : 'Ya firmó su contrato. Debe estar esperando dispersión (2-8 horas, L-S).';\n    }\n  }\n  return `CONTEXTO DEL CLIENTE (en proceso de aplicación)\nIdentidad:\n- Nombre: ${b.first_name || 'no disponible'}\n- User ID: ${b.user_id}\n- Email: ${b.primary_email || 'no disponible'}\nEstado de la aplicación:\n- Application ID: ${b.application_id || 'n/a'}\n- Tipo: ${b.application_type || 'n/a'}\n- Fecha de aplicación: ${b.application_date || 'n/a'}\n- Credit check: ${b.credit_check_status}\n- Verificación: ${b.verification_status}\n- Proceso: ${b.process_status || 'n/a'}\n- Firma de contrato: ${b.signature ? 'firmado' : 'pendiente'}\nSIGUIENTE PASO DEL CLIENTE:\n${nextStep}\nGuía al cliente hacia la acción que le falta. Si tiene dudas específicas sobre por qué le rechazaron o por qué falló una validación, transfiere a un agente humano — el bot no debe especular sobre razones de rechazo.`;\n})() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        208
+      ],
+      "id": "f8290e43-335c-46b1-bb2e-2a0e0fa4240c",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "04fc0019-1522-4a6a-906a-cd85a108f573",
+              "name": "route_type",
+              "value": "={{ $('router_cliente').item.json.route_type }}",
+              "type": "string"
+            },
+            {
+              "id": "46f44d9c-ccb2-4a16-a55d-9a7767091d3b",
+              "name": "daily_available",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "bc8ca269-b027-408c-9b16-51c49d69bb73",
+              "name": "should_escalate",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "356f43d8-73d8-46ba-af12-8d1203c806c4",
+              "name": "base_context",
+              "value": "={{ $('router_cliente').item.json.base_context }}",
+              "type": "object"
+            },
+            {
+              "id": "2618ad88-2b0a-47c2-89cf-a8ba05209630",
+              "name": "context_block",
+              "value": "={{ (() => {\n  const b = $('router_cliente').item.json.base_context;\n  const rt = $('router_cliente').item.json.route_type;\n  if (rt === 'FAILED_DISBURSAL') {\n    return `CONTEXTO DEL CLIENTE (dispersión falló)\nIdentidad:\n- Nombre: ${b.first_name || 'no disponible'}\n- User ID: ${b.user_id}\n- Loan ID: ${b.loan_id}\nHubo un problema técnico con la dispersión del préstamo. No intentes resolverlo — transfiere a un agente humano de inmediato.\nRespuesta sugerida: \"Veo que hubo un problema con la dispersión de tu préstamo. Te voy a transferir con un agente que te pueda ayudar a resolverlo.\"`;\n  }\n  if (rt === 'UNKNOWN_USER') {\n    return `CONTEXTO DEL CLIENTE (no registrado)\nNo encontramos al cliente en nuestra base de datos con este número de teléfono. Puede ser:\n- Cliente nuevo que nunca ha aplicado\n- Cliente que se registró con otro número\n- Error en el formato del teléfono\nRespuesta sugerida: Preguntar amablemente si es cliente de FinDemo y con qué número se registró. Si es nuevo, invitarlo a descargar la app.`;\n  }\n  return `CONTEXTO DEL CLIENTE (caso no clasificado)\nIdentidad:\n- Nombre: ${b.first_name || 'no disponible'}\n- User ID: ${b.user_id || 'n/a'}\nEste cliente no cayó en ninguna categoría estándar. Responde con información general y escala a un agente humano si la pregunta requiere datos específicos.`;\n})() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        400
+      ],
+      "id": "23bbfc0d-dbd2-40c7-ab4f-640f832d8e06",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        816,
+        160
+      ],
+      "id": "bef8a06d-76bc-416c-a44a-aacb92355928",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HbEUMo0jU5ibmXMC",
+          "cachedResultUrl": "/workflow/HbEUMo0jU5ibmXMC",
+          "cachedResultName": "event"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [
+            "info"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2016,
+        160
+      ],
+      "id": "8ac6ea95-37b0-450a-a96a-0c824b330565",
+      "name": "Call 'event'"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "sender_name"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "message_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        112
+      ],
+      "id": "4998e0a8-9af8-4d6a-9f93-3a9d84aef3ff",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "806affbb-8734-44a8-831e-e7a8c88775d4",
+              "name": "mensaje",
+              "value": "={{ $('Webhook').item.json.mensaje }}",
+              "type": "string"
+            },
+            {
+              "id": "0fb557ea-4228-4f3a-9d13-8657f6d65fd2",
+              "name": "historial",
+              "value": "={{ $('Webhook').item.json.historial }}",
+              "type": "string"
+            },
+            {
+              "id": "710c3240-f0b7-4d16-aa48-87e15de03f5b",
+              "name": "total_messages",
+              "value": "={{ $('Webhook').item.json.total_messages }}",
+              "type": "string"
+            },
+            {
+              "id": "7130f601-d01f-423c-93be-78ca0b8571f3",
+              "name": "conversation_id",
+              "value": "={{ $('Webhook').item.json.conversation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5cc3d4c9-966b-4556-afc0-6af694289b27",
+              "name": "account_id",
+              "value": "={{ $('Webhook').item.json.account_id }}",
+              "type": "string"
+            },
+            {
+              "id": "9cba585f-6d59-401b-a7aa-1855033d8f92",
+              "name": "phone_number",
+              "value": "={{ $('Webhook').item.json.phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "4e46c807-7afe-446d-b9f0-7ff1e4545d3c",
+              "name": "inbox_id",
+              "value": "={{ $('Webhook').item.json.inbox_id }}",
+              "type": "string"
+            },
+            {
+              "id": "eba7ede0-2542-4f35-8c68-0ba370c3f242",
+              "name": "user_identifier",
+              "value": "={{ $('Webhook').item.json.user_identifier }}",
+              "type": "string"
+            },
+            {
+              "id": "031b16ca-2492-4ff7-a85f-aa8364cb261a",
+              "name": "route_type",
+              "value": "={{ $('Merge').item.json.route_type }}",
+              "type": "string"
+            },
+            {
+              "id": "5d4c9a42-72fd-4035-b892-1832a0cc0a14",
+              "name": "context_block",
+              "value": "={{ $('Merge').item.json.context_block }}",
+              "type": "string"
+            },
+            {
+              "id": "03a29a41-774c-4205-af02-8c4afcd638c9",
+              "name": "base_context",
+              "value": "={{ $('Merge').item.json.base_context }}",
+              "type": "string"
+            },
+            {
+              "id": "b82d35a1-cfcc-40e9-9685-adede4ef94d3",
+              "name": "should_escalate",
+              "value": "={{ $('Merge').item.json.should_escalate }}",
+              "type": "string"
+            },
+            {
+              "id": "d295f402-04c2-49b2-85c8-07e7b6fe08da",
+              "name": "daily_available",
+              "value": "={{ $('Merge').item.json.daily_available }}",
+              "type": "string"
+            },
+            {
+              "id": "95ff1895-ba66-4350-b41c-d0976f15bfae",
+              "name": "message_id",
+              "value": "={{ $item(\"0\").$node[\"Webhook\"].json[\"message_id\"] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1024,
+        192
+      ],
+      "id": "7edb82b7-65ff-4265-99f5-eca8e2841d61",
+      "name": "preparar_input_event"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "44GwmqKTYG14t7A0",
+          "cachedResultUrl": "/workflow/44GwmqKTYG14t7A0",
+          "cachedResultName": "actived_loan"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inbox_id": "={{ $('Webhook').item.json.inbox_id }}",
+            "account_id": "={{ $('Webhook').item.json.account_id }}",
+            "conversation_id": "={{ $('Webhook').item.json.conversation_id }}",
+            "mensaje": "={{ $('Webhook').item.json.mensaje }}",
+            "historial": "={{ $('Webhook').item.json.historial }}",
+            "total_messages": "={{ $('Webhook').item.json.total_messages }}",
+            "phone_number": "={{ $('Webhook').item.json.phone_number }}",
+            "user_identifier": "={{ $node[\"get_info_usuario_db\"].json[\"user_id\"] }}",
+            "base_context": "={{ $('router_cliente').item.json.base_context }}",
+            "message_id": "={{ $item(\"0\").$node[\"Webhook\"].json[\"message_id\"] }}"
+          },
+          "matchingColumns": [
+            "info"
+          ],
+          "schema": [
+            {
+              "id": "mensaje",
+              "displayName": "mensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "historial",
+              "displayName": "historial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "total_messages",
+              "displayName": "total_messages",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "account_id",
+              "displayName": "account_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": true
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inbox_id",
+              "displayName": "inbox_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "user_identifier",
+              "displayName": "user_identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "route_type",
+              "displayName": "route_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "context_block",
+              "displayName": "context_block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "base_context",
+              "displayName": "base_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "should_escalate",
+              "displayName": "should_escalate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "daily_available",
+              "displayName": "daily_available",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        -304
+      ],
+      "id": "d99b506c-11c5-4629-8b91-8862d06f992d",
+      "name": "Call 'ACTIVE_LOAN'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "F4ZXNT0VY64cf30o",
+          "cachedResultUrl": "/workflow/F4ZXNT0VY64cf30o",
+          "cachedResultName": "PAID_OFF"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "inbox_id": "={{ $('Webhook').item.json.inbox_id }}",
+            "account_id": "={{ $('Webhook').item.json.account_id }}",
+            "conversation_id": "={{ $('Webhook').item.json.conversation_id }}",
+            "mensaje": "={{ $('Webhook').item.json.mensaje }}",
+            "historial": "={{ $('Webhook').item.json.historial }}",
+            "total_messages": "={{ $('Webhook').item.json.total_messages }}",
+            "phone_number": "={{ $('Webhook').item.json.phone_number }}",
+            "user_identifier": "={{ $node[\"get_info_usuario_db\"].json[\"user_id\"] }}",
+            "base_context": "={{ $('router_cliente').item.json.base_context }}",
+            "message_id": "={{ $item(\"0\").$node[\"Webhook\"].json[\"message_id\"] }}"
+          },
+          "matchingColumns": [
+            "info"
+          ],
+          "schema": [
+            {
+              "id": "mensaje",
+              "displayName": "mensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "historial",
+              "displayName": "historial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "total_messages",
+              "displayName": "total_messages",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "account_id",
+              "displayName": "account_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": true
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "inbox_id",
+              "displayName": "inbox_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "user_identifier",
+              "displayName": "user_identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "route_type",
+              "displayName": "route_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "context_block",
+              "displayName": "context_block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "base_context",
+              "displayName": "base_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "should_escalate",
+              "displayName": "should_escalate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "daily_available",
+              "displayName": "daily_available",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        -144
+      ],
+      "id": "1ae4a437-2ba9-4755-9dd7-c6b7d15b40c2",
+      "name": "Call 'PAID_OFF'"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "should_escalate": "={{ $('Merge').item.json.should_escalate }}",
+            "daily_available": "={{ $('Merge').item.json.daily_available }}",
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "user_identifier": "={{ $('Webhook').item.json.user_identifier }}",
+            "phone_number": "={{ $('Webhook').item.json.phone_number }}",
+            "route_type": "={{ $('Merge').item.json.route_type }}",
+            "base_context": "={{ JSON.stringify($('Merge').item.json.base_context) }}",
+            "context_block": "={{ $('Merge').item.json.context_block }}",
+            "last_refreshed_at": "={{ $now.toISO() }}",
+            "message_count": "={{ $node[\"Webhook\"].json[\"total_messages\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_identifier",
+              "displayName": "user_identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "route_type",
+              "displayName": "route_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "should_escalate",
+              "displayName": "should_escalate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "daily_available",
+              "displayName": "daily_available",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "base_context",
+              "displayName": "base_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "context_block",
+              "displayName": "context_block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_refreshed_at",
+              "displayName": "last_refreshed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "message_count",
+              "displayName": "message_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1232,
+        80
+      ],
+      "id": "19ce8c56-4bb5-4f54-8f03-9ab722dc0fa1",
+      "name": "Upsert row(s)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "04fc0019-1522-4a6a-906a-cd85a108f573",
+              "name": "route_type",
+              "value": "IN_APPLICATION",
+              "type": "string"
+            },
+            {
+              "id": "46f44d9c-ccb2-4a16-a55d-9a7767091d3b",
+              "name": "daily_available",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "bc8ca269-b027-408c-9b16-51c49d69bb73",
+              "name": "should_escalate",
+              "value": "={{ $('router_cliente').item.json.base_context.credit_check_status === 'REJECTED' || $('router_cliente').item.json.base_context.verification_status === 'REJECTED' }}",
+              "type": "boolean"
+            },
+            {
+              "id": "356f43d8-73d8-46ba-af12-8d1203c806c4",
+              "name": "base_context",
+              "value": "={{ $('router_cliente').item.json.base_context }}",
+              "type": "object"
+            },
+            {
+              "id": "2618ad88-2b0a-47c2-89cf-a8ba05209630",
+              "name": "context_block",
+              "value": "=={{ (() => {\n  const b = $('router_cliente').item.json.base_context;\n  const rejectedBy = b.credit_check_status === 'REJECTED' ? 'credit_check' : 'verification';\n  const eligibleGuarantee = b.eligible_for_guarantee === true\n    ? 'SÍ — puede tomar la oferta de préstamo en garantía'\n    : (b.eligible_for_guarantee === false\n        ? 'NO — no califica para préstamo en garantía'\n        : 'desconocido — no tenemos el dato cargado');\n\n  return `CONTEXTO DEL CLIENTE (RECHAZADO)\nIdentidad:\n- Nombre: ${b.first_name || 'no disponible'}\n- User ID: ${b.user_id}\n- Email: ${b.primary_email || 'no disponible'}\n\nEstado del rechazo:\n- Rechazado en: ${rejectedBy}\n- Credit check: ${b.credit_check_status}\n- Verificación: ${b.verification_status}\n- Fecha de aplicación: ${b.application_date || 'n/a'}\n- Tipo de aplicación: ${b.application_type || 'n/a'}\n\nElegibilidad para préstamo en garantía:\n- ${eligibleGuarantee}\n\n=== INSTRUCCIONES DE RUTEO DEL CLIENTE RECHAZADO ===\nEste cliente fue rechazado. Tu respuesta depende de QUÉ está preguntando:\n\nCASO A — El cliente SOLO pregunta por el status de su solicitud rechazada (\"¿en qué quedó mi solicitud?\", \"¿por qué me rechazaron?\", \"¿qué pasa con mi préstamo?\"):\n→ Respuesta automática: \"Tu solicitud fue rechazada. Puedes volver a aplicar después de 90 días desde la fecha de tu aplicación. Mientras tanto, te invitamos a estar al pendiente de la app FinDemo para futuras ofertas.\"\n→ NO escales a humano. NO especules sobre las razones del rechazo.\n\nCASO B — El cliente pregunta por BPTU, remesas, o préstamo en garantía (\"¿puedo recibir mi remesa?\", \"¿qué es el préstamo en garantía?\", \"¿puedo usar BPTU?\", \"¿hay otra opción?\"):\n→ Ayúdalo a convertir a préstamo en garantía:\n  • Explícale brevemente qué es el préstamo en garantía y cómo funciona.\n  • Si su elegibilidad es SÍ, anímalo a activarlo desde la app.\n  • Si es NO o desconocida, explícale el producto y pídele que revise disponibilidad en la app.\n  • Resuelve dudas básicas del producto (BPTU/remesas/garantía).\n→ NO escales a humano salvo que el cliente pida un agente explícitamente o tenga una duda fuera de tu alcance.\n\nCASO C — Cualquier otra cosa que no encaje en A ni B (queja fuerte, pide humano, ya intentó varias veces sin entender):\n→ Escala a un agente humano.\n\nIMPORTANTE: NO inventes razones del rechazo. NO prometas reactivación. NO des fechas distintas a \"90 días desde la aplicación\".`;\n})() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        560
+      ],
+      "id": "ac56fe78-f7a7-4711-9064-c499131e489c",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an intent classifier for Finny (FinDemo collections).\nRead the customer's LATEST message (the history is for context only) and classify the intent of THIS turn. Customer status: ACTIVE_LOAN.\n\nChoose ONE label:\n- pago_info: payment details/method, amount owed, payment amount, early repayment or settlement.\n- flexibilidad: unable to pay, requesting more time, deferral, promise to pay, refinancing, options.\n- descuento: asking about a discount or promotion.\n- dispersión: loan not received, or confirming/asking about disbursement.\n- consulta_datos: requesting payment history, future schedule, or dates of past payments.\n- escalar: payment not recorded, payment error/refund, technical error or complaint, phone/email change, login issue, debt dispute, or request to speak with a person.\n- general: greeting, thank you, farewell, confirming payment date, or none of the above.\n\nReturn ONLY this JSON, without markdown or extra text:\n{\"intención\":\"<label>\",\"confianza\":<0..1>}\n\nHISTORY:\n{{ $('Webhook').item.json.historial }}\n\nCUSTOMER MESSAGE:\n{{ $('Webhook').item.json.mensaje }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1568,
+        -368
+      ],
+      "id": "b4186645-9d78-4e9c-90fd-e9082e377d0e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        -128
+      ],
+      "id": "381cf8fa-882a-4ed6-a683-1239e7842c5d",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "oDyev90Kbv6yIRNf",
+          "cachedResultUrl": "/workflow/oDyev90Kbv6yIRNf",
+          "cachedResultName": "clasificar_intencion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        192
+      ],
+      "id": "b045572a-d2b5-497b-950f-978f294e4810",
+      "name": "clasf_intent"
+    }
+  ],
+  "connections": {
+    "router_cliente": {
+      "main": [
+        [
+          {
+            "node": "Switch_ruta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_info_usuario_db": {
+      "main": [
+        [
+          {
+            "node": "router_cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch_ruta": {
+      "main": [
+        [
+          {
+            "node": "Call 'ACTIVE_LOAN'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'PAID_OFF'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "preparar_input_event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "get_info_usuario_db",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_input_event": {
+      "main": [
+        [
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "clasf_intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert row(s)": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "XEC43hDrjmmd4bg5",
+  "active": false
+}

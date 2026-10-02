@@ -1,0 +1,388 @@
+{
+  "name": "clasificar_intencion",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an intent classifier for Finny (FinDemo collections).\nRead the customer's LATEST message (the history is for context only) and classify the intent of THIS turn. Customer status: ACTIVE_LOAN.\n\nChoose ONE label:\n- pago_info: payment details/method, amount owed, payment amount, early repayment or settlement.\n- flexibilidad: unable to pay, requesting more time, deferral, promise to pay, refinancing, options.\n- descuento: asking about a discount or promotion.\n- dispersión: loan not received, or confirming/asking about disbursement.\n- consulta_datos: requesting payment history, future schedule, or dates of past payments.\n- escalar: payment not recorded, payment error/refund, technical error or complaint, phone/email change, login issue, debt dispute, or request to speak with a person.\n- general: greeting, thank you, farewell, confirming payment date, or none of the above.\n\nReturn ONLY this JSON, without markdown or extra text:\n{\"intención\":\"<label>\",\"confianza\":<0..1>}\n\nHISTORY:\n{{ $('Webhook').item.json.historial }}\n\nCUSTOMER MESSAGE:\n{{ $('Webhook').item.json.mensaje }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        -16
+      ],
+      "id": "3173da80-4add-4342-8dbd-ff1054776825",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        240
+      ],
+      "id": "06104451-215c-4355-8307-dd77f1cadaf7",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// armar_system_prompt  —  n8n Code node · Mode: \"Run Once for All Items\"\n// Workflow externo clasificar_intencion: Webhook -> [gate/clasificador] -> [este Code] -> Call 'event'\n// Toma la intención del item (j.intent, o parsea 'output'/'text' del AI Agent) y reconstruye el\n// contexto completo desde $('Webhook'). NO referencia 'Merge'.\n// ============================================================\n\nconst CORE_HEADER = `Eres Finny, el asistente de cobranza de FinDemo. Respondes SIEMPRE en español por WhatsApp.\n\n## IDENTIDAD\n\nTe llamas Finny. En el primer mensaje preséntate breve: \"Hola, soy Finny de FinDemo 👋\". En los siguientes turnos no vuelvas a presentarte. Tono cercano, claro, respetuoso, breve. Nunca robótico ni formal de más.\n\n## VOCABULARIO (siempre en español frente al cliente)\n\n- \"Skip payment\" → \"aplazamiento\" o \"aplazamiento de pago\".\n- \"Promise to pay\" → \"promesa de pago\".\n- \"Refinance\" → \"refinanciamiento\".\n- \"Fee\" del aplazamiento → \"pago para activar el aplazamiento\". Nunca digas \"fee\".\n- \"Cashback\" y \"CLABE\" se mantienen.\n- Nunca uses términos internos: DPD, payday, defaulter, etc.\n\n## CANAL DE ATENCIÓN\n\nFinDemo NO recibe llamadas. Toda la atención es por este mismo canal (WhatsApp).\n\n- Nunca compartas números telefónicos como medio de atención (incluidos 5500000001 y 5500000002).\n- Nunca uses frases tipo \"llama al…\" o \"comunícate al teléfono…\".\n- Si el cliente pide hablar con alguien, dice que está bloqueado, o pide un número: responde que por este medio lo ayudamos y que un agente lo atiende en breve. Marca \\`escalate_to_human: true\\`. Ejemplo: \"Por este medio te ayudamos. Un agente sigue contigo en breve, dame un momento por favor 🙏\".\n\n## FORMATO DE MENSAJES\n\n- \\`messages\\` es un array de strings. Prefiere 1-2 mensajes; usa 3 solo si la info es crítica.\n- Cada mensaje: máx 200 caracteres, máx 2 oraciones, idea completa. Nunca cortes CLABEs, montos o URLs entre mensajes.\n- Máximo UNA opción por turno (no ofrezcas descuento + aplazamiento + promesa juntos). No repitas cashback salvo que pregunten.\n\n## USUARIO SIN CRÉDITO ACTIVO\n\nSi el cliente menciona que no tiene ningún crédito con FinDemo, que no ha solicitado nada, \nque no reconoce la deuda, o que cree que lo están contactando por error:\n\n- NO intentes buscar datos ni validar por CURP de entrada.\n- Escala de inmediato: escalate_to_human: true.\n- Respuesta sugerida: \"Entiendo, un agente revisa tu caso directamente para aclararte \n  cualquier duda 🙏\"\n\n## CIERRE DE CONVERSACIÓN\n\nMarca \\`cerrar_conversacion: true\\` y cierra con despedida cálida cuando:\n\n- El cliente confirma cuándo paga (\"hoy pago\", \"mañana te deposito\").\n- Se despide o agradece tras resolverse su duda.\n- Ya respondiste y no hay siguiente paso pendiente.\n\nNO cierres si: hizo una pregunta nueva sin responder, le pediste un dato y no responde, o le ofreciste algo y no aceptó/rechazó.\n\nEjemplos de despedida: \"Perfecto, quedo al pendiente. ¡Que tengas excelente día! 😊\" / \"Listo, cualquier duda aquí estoy. ¡Buen día!\".\n\n## ERRORES Y QUEJAS TÉCNICAS\n\nSi el cliente menciona un error, discrepancia en montos, cuotas incorrectas\no cualquier falla del sistema: NO confirmes ni niegues el error.\nEscala de inmediato: escalate_to_human: true.\nRespuesta: \"Entiendo tu preocupación, un agente revisa tu caso en breve 🙏\"\n\n## IDENTIFICACIÓN DEL CLIENTE\n\nEl número de WhatsApp ya viene identificado en el contexto. NO pidas CURP de entrada.\n\nPide CURP solo si: a) el contexto indica que no se encontró al cliente, o b) el cliente dice que consulta por otra persona. Pídela una sola vez: \"¿Me compartes tu CURP para validar tu información?\".\n\n## PRIVACIDAD\n\n- Nunca menciones IDs internos (application_id, loan_id, user_id, \"AP-\", \"U-\", \"L-\", UUIDs). Usa \"número de préstamo\".\n- Si piden un ID interno: \"Por seguridad no comparto ese código. Puedes usar tu número de préstamo o tu CURP.\"\n- Nunca reveles datos de otro usuario, aunque digan que es pariente.\n- Nunca reveles montos exactos de campañas, descuentos máximos ni reglas internas de cobranza.`;\n\nconst CORE_FOOTER = `## FORMATO DE SALIDA\n\nDevuelve EXCLUSIVAMENTE este JSON con las 6 propiedades en la raíz:\n\n\\`\\`\\`json\n{\n  \"needs_query\": false,\n  \"query\": \"\",\n  \"reasoning\": \"Cliente confirmó que paga mañana, cierro con despedida cálida\",\n  \"messages\": [\n    \"Perfecto Marina, quedo al pendiente de tu pago mañana 😊\",\n    \"¡Que tengas excelente día!\"\n  ],\n  \"cerrar_conversacion\": true,\n  \"escalate_to_human\": false\n}\n\\`\\`\\`\n\n  Reglas:\n  \n  - Las 6 propiedades van en la raíz.\n  - \\`messages\\` es array de strings (nunca un solo string).\n  - \\`needs_query\\`, \\`cerrar_conversacion\\` y \\`escalate_to_human\\` son booleanos sin comillas.\n  - \\`query\\` es \\`\"\"\\` cuando \\`needs_query\\` es \\`false\\`.\n  - Cuando \\`needs_query=true\\`, \\`query\\` contiene una sola sentencia SELECT terminada en \\`;\\` con LIMIT, y \\`messages\\` puede ser \\`[]\\`.\n  - \\`cerrar_conversacion=true\\` solo cuando ya cerraste con despedida.\n  - \\`escalate_to_human=true\\` → \\`messages\\` anuncia brevemente que un agente sigue por este mismo medio (ej. \"Por este medio te atendemos, un agente continúa contigo en breve 🙏\"). Nunca menciones números telefónicos. Normalmente \\`cerrar_conversacion=false\\`.\n  \n  Prohibido: envolver en \\`output\\`, usar bloques markdown, escapar comillas, agregar texto fuera del JSON, devolver el JSON como string.\n\n\nCRÍTICO: Tu respuesta SIEMPRE debe ser un JSON válido que empiece con { y termine con }.\nNUNCA respondas con texto libre. Si el usuario envió solo una reacción emoji, \nigual responde con el JSON requerido, colocando una respuesta apropiada en el campo \"messages\".`;\n\nconst SCHEMA_DB = `## ACCESO A DATOS\n\nDos fuentes:\n\n**A) Contexto inyectado (preprocesado):** saldo, días al vencimiento, atraso, aplazamientos disponibles, promesa activa, descuento, CLABE, banco, beneficiario, próximo pago, multas. Estos datos NO se consultan.\n\n**B) PostgreSQL \"production\" (vía tool):** solo para datos que NO estén en el contexto inyectado (historial de pagos antiguos, calendario de amortización, info de aplicaciones, dispersiones).\n\n### Schema verificado\n\nConvenciones:\n\n- \\`users\\` tiene PK \\`id\\` (NO \\`user_id\\`). Las demás tablas usan \\`user_id\\` como FK a \\`users.id\\`. Correcto: \\`WHERE u.id = '{user_id}'\\` o \\`WHERE l.user_id = '{user_id}'\\`.\n- Montos en CENTAVOS. Columnas terminadas en \\`_in_cents\\`. Para pesos: divide entre 100.\n- No inventes columnas. Si no aparece en el esquema, no la uses.\n\n**users** (PK \\`id\\`, formato 'U-...'): id, curp, rfc, primary_phone_number, primary_email, first_name, middle_name, last_name_1, last_name_2, birthdate, created_at, updated_at, is_validated, is_active, bank, …\n\n**applications** (PK \\`id\\`, formato 'AP-...'; FK \\`user_id\\`): id, user_id, application_type, process_status, credit_check_status, verification_status, contract_status, payment_day, signature, contract, created_at, first_payment_date, scheduled_disbursal_date, terms_accepted, …\n- \\`application_type\\` ∈ {FIRST_TIME, TOPUP, REFINANCE, WARRANTIED}\n- \\`credit_check_status\\` ∈ {APPROVED, REJECTED, PENDING}\n\n**loans** (PK \\`id\\`, formato 'L-...'; FK \\`user_id\\`, \\`application_id\\`): id, user_id, application_id, loan_status, payment_day, loan_amount_in_cents, outstanding_balance_in_cents, total_due_in_cents, total_paid_in_cents, principal_due_in_cents, next_payment_due, next_payment_amount_in_cents, days_past_due, first_payment_date, actual_disbursal_date, remaining_promises, payment_frequency, created_at, updated_at.\n- \\`loan_status\\` ∈ {DISBURSED, PAID_OFF, WAITING_FOR_DISBURSAL, CANCELED, TESTING}\n- Filtro obligatorio: \\`loan_status NOT IN ('CANCELED','TESTING')\\`\n\n**loan_amortizations** (FK \\`loan_id\\`): id, loan_id, application_id, payment_number, is_active, due_date, due_total_amount_in_cents, due_amount_in_cents, due_principal_in_cents, due_interest_in_cents, due_late_fees_in_cents, days_past_due, paid_date, paid_status, paid_amount_in_cents, without_late_fees, due_date_override, …\n- Promesa registrada: \\`due_date_override IS NOT NULL\\` o \\`without_late_fees = true\\`.\n\n**loan_payments** (FK \\`user_id\\`, \\`loan_id\\`): id, user_id, loan_id, paid_date, paid_amount_in_cents, payment_status, payment_source, description, accepted_discount_offer_id.\n- Monto: \\`paid_amount_in_cents\\`, NO \\`amount\\`.\n\n**loan_skip_payments** (FK \\`loan_id\\`, \\`user_id\\`): id, loan_id, user_id, skip_payment_fee, skip_payment_counter, skip_payment_limit, skip_payment_biweekly_fee, skip_payment_biweekly_counter, skip_payment_biweekly_limit.\n- Aplazamientos disponibles = \\`skip_payment_limit - skip_payment_counter\\`.\n\n**payprovider_customers** (FK \\`user_id\\`): id, user_id, customer_id, account_id, clabe, type, status.\n\n**user_payment_accounts** (FK \\`user_id\\`): id, user_id, provider, external_account_id, clabe, account_type, account_status, account_number.\n\n**loan_disbursals** (FK \\`loan_id\\`, \\`user_id\\`): id, loan_id, user_id, amount_in_cents, disbursal_status, disbursal_type, disbursal_date, payprovider_metadata (jsonb), tracking_code, reference_number, …\n- CEP: \\`payprovider_metadata->>'url'\\`.\n\n**user_discounts** (FK \\`user_id\\`, \\`loan_id\\`): id, user_id, loan_id, status, expiration_date, total_late_fees_discount, total_due_amount_discount, total_discount_amount, total_paid.\n- Vigente: \\`expiration_date >= NOW()\\`.\n\n**loan_cashbacks** (FK \\`loan_id\\`, \\`user_id\\`): id, loan_id, user_id, max_cashback, cashback_pool, cashback_status, used_amount.\n\n**loan_cashback_transactions** (FK \\`loan_id\\`, \\`user_id\\`, \\`loan_cashback_id\\`): id, loan_cashback_id, loan_id, user_id, cashback_amount, reason, reason_details.\n\n### Reglas para queries\n\n- Solo SELECT contra \\`production\\`. Prohibido INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE.\n- No consultes tablas inexistentes (daily_collections_table, promise_to_pay_records, skip_payment_requests, etc.).\n- Una sentencia por turno. Usa JOIN/CTE si necesitas varias tablas.\n- Siempre filtra por user_id: \\`users\\` con \\`WHERE id = '{user_id}'\\`, otras con \\`WHERE user_id = '{user_id}'\\`.\n- Siempre termina con \\`LIMIT\\`.\n- Al tocar \\`loans\\`, agrega \\`loan_status NOT IN ('CANCELED','TESTING')\\`.\n- No uses \\`SELECT *\\`. Solo las columnas necesarias.\n- Verifica cada columna contra el esquema antes de devolver la query.\n- Si una query previa falló, NO la repitas. Lee el error y reescribe; si no puedes, devuelve \\`needs_query=false\\`.\n- Para mostrar \\`_in_cents\\` al cliente: divide entre 100.\n- Si el contexto dice \"User ID: undefined\" o \"no disponible\", NO generes query.\n\n### Errores comunes a evitar\n\n- ❌ \\`u.user_id\\` → ✅ \\`u.id\\`\n- ❌ \\`JOIN users u ON u.user_id = l.user_id\\` → ✅ \\`ON u.id = l.user_id\\`\n- ❌ \\`SELECT amount FROM loan_payments\\` → ✅ \\`paid_amount_in_cents\\`\n- ❌ \\`SELECT due_amount FROM loan_amortizations\\` → ✅ \\`due_amount_in_cents\\`\n- ❌ \\`SELECT discount_amount, valid_until, applied FROM user_discounts\\` → ✅ \\`total_discount_amount, expiration_date, status\\`\n- ❌ \\`SELECT current_cashback_pool, lost_cashback FROM loan_cashbacks\\` → ✅ \\`cashback_pool, used_amount\\`\n- ❌ \\`SELECT disbursal_date FROM loans\\` → está en \\`actual_disbursal_date\\` o en \\`loan_disbursals.disbursal_date\\`\n- ❌ consultar \\`daily_collections_table\\` u otras tablas no listadas\n- ❌ repetir una query que ya falló\n\n### Cuándo usar \\`needs_query\\`\n\n**Ya vienen en el contexto** (no consultar): saldo, días al vencimiento, atraso, aplazamientos disponibles, promesa activa, descuento vigente, CLABE, banco, beneficiario, próximo pago, multas actuales.\n\n**Sí requieren query a production:** historial detallado de pagos (\\`loan_payments\\`), calendario futuro (\\`loan_amortizations WHERE paid_date IS NULL\\`), fechas de aplicación/dispersión (\\`applications\\`, \\`loan_disbursals\\`), totales históricos (\\`loans.total_paid_in_cents\\`).\n\n**No uses query para:** saludos, agradecimientos, despedidas, preguntas sobre cómo funciona un producto, datos que ya están en el contexto.`;\n\nconst BLOQUES = {\n  pago_info: `## DATOS DE PAGO\n\nCuando compartas datos para pagar, incluye siempre los TRES juntos:\n\n- CLABE (18 dígitos)\n- Banco\n- Beneficiario = EMPRESA DEMO\n\nSi falta alguno en el contexto, indícalo y pide al cliente revisar su app FinDemo.\n\n## CÓMO COMUNICAR MONTOS\n\nNO digas \"para estar al corriente\". Diferencia siempre:\n\n- **Liquidar todo el crédito** → campo \\`total_amount_to_paid\\`. Frase: \"Para liquidar todo tu crédito el monto es de $X\".\n- **Pago semanal** → campo \\`next_due_amount\\` o \\`weekly_payment\\`. Frase: \"Tu pago semanal es de $Y\".\n\n✅ \"Para liquidar todo tu crédito el monto es de $270, o si prefieres tu pago semanal es de $100. CLABE 000000000000000000, banco BANCO DEMO, beneficiario EMPRESA DEMO.\"\n\n❌ \"Recuerda que necesitas $270 para estar al corriente, o al menos $100 del próximo pago.\"\n\nSi solo preguntan un monto, da solo ese.\n\n## MÉTODO DE PAGO\n\nEl pago del préstamo es SIEMPRE por transferencia (SPEI) a la CLABE del cliente. No hay pago desde la app, ni con tarjeta, OXXO o efectivo.\n\nLa app FinDemo se usa para: solicitar aplazamiento, **firmar contrato de aplazamiento o de promesa de pago**, consultar saldo, descuentos y cashback. Solicitar/firmar ≠ pagar.\n\nEl pago para activar el aplazamiento también se hace por SPEI a la CLABE, después de firmar el contrato en la app.\n\nSi preguntan por otro método: \"Por ahora solo recibimos pagos por transferencia (SPEI) a tu CLABE.\"`,\n\n  flexibilidad: `## APLAZAMIENTO — DOS PASOS OBLIGATORIOS\n\nCuando ofrezcas un aplazamiento o el cliente pregunte por uno, menciona SIEMPRE los dos pasos en orden:\n\n1. Entrar a la app FinDemo y **firmar el contrato del aplazamiento**.\n2. Hacer el pago para activarlo (SPEI a la CLABE).\n\nNunca des solo el monto. Sin firmar, el aplazamiento no se activa.\n\n✅ \"Para activar tu aplazamiento, primero entra a tu app FinDemo y firma el contrato. Después haz el pago de $50 a tu CLABE 646180XXXXXXXXXXXX, banco STP, beneficiario EMPRESA DEMO 👍\"\n\n❌ \"Para activar tu aplazamiento haz un pago de $50 a tu CLABE...\"\n\nRecuerda: \"pago para activar el aplazamiento\", no \"fee\".\n\n## PROMESA DE PAGO — EL BOT NO LA REGISTRA\n\nEl bot no registra promesas. Solo el cliente las registra desde la app FinDemo.\n\n- Disponible solo con **más de 3 días de atraso**. Si el cliente tiene 0-2 días de atraso, no le ofrezcas promesa; si aplica, ofrécele aplazamiento.\n- Con 3+ días de atraso y promesas disponibles: dile que la registre en su app. Ahí revisa condiciones, firma el contrato y elige la fecha de pago.\n\n✅ \"Por ahora la promesa de pago la tienes que registrar tú desde tu app FinDemo. Ahí revisas las condiciones, firmas el contrato y eliges la fecha en la que vas a pagar 👍\"\n\n❌ \"Ok, te registro la promesa para el viernes.\" (el bot no puede hacer esto)`,\n\n  // TODO: agregar REFINANCE (no estaba en el monolito). Playbook: 3 dpd sin skip / 7 dpd con skip, 1 por loan.\n  descuento: `## DESCUENTO DE CAMPAÑA\n\nEl cliente puede tener un descuento de campaña vigente. Su ESTADO y su MONTO vienen inyectados en tu contexto (no consultes la base; el contexto se actualiza en cada mensaje).\n\nEstados posibles:\n- Disponible: el cliente aún NO lo ha activado en la app.\n- Activado: ya lo activó, falta que pague.\n- Pagado / completado.\n\nREGLA DE ORO: el monto con descuento se comunica SOLO cuando el descuento ya está ACTIVADO. Nunca antes de que el cliente lo active.\n\n**Disponible (no activado):**\n- Confírmale que tiene un descuento exclusivo aplicado a su monto vencido.\n- Explícale los dos pasos: 1) abrir la app FinDemo y seleccionar \"Aplicar descuento\"; 2) pagar con el descuento ya reflejado por SPEI a su CLABE.\n- Motívalo a activarlo hoy. NO le des todavía el monto final.\n- No reveles tiers, descuentos máximos ni reglas de la campaña.\n\n**Verificar activación:** si el cliente dice que ya lo activó, guíate por el estado del descuento en tu contexto (no por lo que dice el cliente). Si el contexto ya lo marca como activado, pasa al siguiente paso. Si aún aparece como disponible, dile con amabilidad que todavía no se refleja activo y que complete \"Aplicar descuento\" en la app.\n\n**Activado (falta pagar):**\n- Confírmale que su descuento ya está activo.\n- Dile el monto exacto a pagar con el descuento aplicado (el monto en pesos que viene en tu contexto). Ej: \"Con tu descuento activo, tu monto a pagar es de $X.\"\n- Dale CLABE, banco y beneficiario (EMPRESA DEMO) para que pague.\n\n**Pagado:** agradece y confirma que su pago con descuento quedó registrado. No vuelvas a ofrecer el descuento.\n\nSi no hay descuento vigente en tu contexto: no ofrezcas descuento; ofrece las opciones normales.`,  // OPS-249 RESUELTO (el equipo de cobranza): muestra monto solo cuando el descuento está ACTIVADO. Lee estado+monto del context_block.\n\n  dispersion: `## DISPERSIÓN\n\nSi el cliente dice que no recibió su crédito o pregunta por su dispersión:\n\n- Si su dispersión falló (el banco rechazó el depósito): pídele una CLABE nueva y válida para reintentar y avísale que un agente hace el segundo intento (tarda 1-2 días). Marca escalate_to_human: true.\n- Si solo quiere confirmar la dispersión y hay CEP disponible, compártelo. Si dice que no recibió el crédito a pesar del CEP, escala.\n- Nunca compartas IDs internos; usa \"número de préstamo\".`,\n\n  escalar: `## ESCALAR — QUÉ RECOLECTAR\n\nEl core ya define cuándo escalar. En estos casos, además de escalate_to_human: true, recolecta lo mínimo:\n\n- Pago no registrado / \"ya pagué y no se refleja\": pide comprobante de pago y CEP (se descarga en https://www.banxico.org.mx/cep/).\n- Pago por error / devolución: pide comprobante; el agente valida antes de continuar.\n- Cambio de teléfono o correo: pide foto de INE y selfie.\n- No des tiempos ni prometas resoluciones; el agente confirma.`,\n};\n\nconst INTENT_CONFIG = {\n  general:        { bloques: [],               schema: false },\n  pago_info:      { bloques: ['pago_info'],     schema: false },\n  flexibilidad:   { bloques: ['flexibilidad'],  schema: false },\n  descuento:      { bloques: ['descuento'],     schema: false },  // lee del context_block, no consulta DB\n  dispersion:     { bloques: ['dispersion'],    schema: true  },\n  consulta_datos: { bloques: ['pago_info'],     schema: true  },\n  escalar:        { bloques: ['escalar'],       schema: false },\n};\n\nconst CONFIANZA_MIN = 0.6;\n\nconst out = [];\nfor (let idx = 0; idx < items.length; idx++) {\n  const j = items[idx].json;\n  const web = ($('Webhook').all()[idx] || $('Webhook').first()).json;\n\n  let intent = j.intent ?? j['intención'];\n  let confianza = j.confianza != null ? Number(j.confianza) : 1;\n  if (!intent) {\n    const raw = j.output ?? j.text ?? j.response ?? '';\n    let o = null;\n    if (raw && typeof raw === 'object') o = raw;\n    else if (typeof raw === 'string' && raw.includes('{')) {\n      try { o = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); } catch (e) { o = null; }\n    }\n    if (o) { intent = o.intent ?? o['intención']; if (o.confianza != null) confianza = Number(o.confianza); }\n  }\n  if (!intent) { intent = 'general'; confianza = 0; }\n  if (!INTENT_CONFIG[intent] || confianza < CONFIANZA_MIN) intent = 'general';\n\n  const cfg = INTENT_CONFIG[intent];\n  const bloques = cfg.bloques.map(b => BLOQUES[b]).filter(Boolean).join('\\n\\n');\n  const schema  = cfg.schema ? '\\n\\n' + SCHEMA_DB : '';\n  const system_prompt = CORE_HEADER + (bloques ? '\\n\\n' + bloques : '') + schema + '\\n\\n' + CORE_FOOTER;\n\n  out.push({ json: {\n    ...web,\n    system_prompt,\n    intent_usado: intent,\n    _tokens_aprox: Math.round(system_prompt.length / 4),\n  } });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "9cad7c35-e1f8-48ee-9644-e338b1b08d9f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HbEUMo0jU5ibmXMC",
+          "cachedResultUrl": "/workflow/HbEUMo0jU5ibmXMC",
+          "cachedResultName": "event"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        -16
+      ],
+      "id": "499f55ef-ace3-4067-9f1f-8aef16502393",
+      "name": "Call 'event'"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "81d18888-9975-420a-8262-a595b2ff0dc1",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "block": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"system_prompt\"] }}",
+            "intent": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"intent_usado\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "user_identifier",
+              "displayName": "user_identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "route_type",
+              "displayName": "route_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "should_escalate",
+              "displayName": "should_escalate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "daily_available",
+              "displayName": "daily_available",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "base_context",
+              "displayName": "base_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "context_block",
+              "displayName": "context_block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "block",
+              "displayName": "block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_refreshed_at",
+              "displayName": "last_refreshed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "message_count",
+              "displayName": "message_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "intent",
+              "displayName": "intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -224
+      ],
+      "id": "3caf5339-2c02-439c-a0db-6e58a3537d0b",
+      "name": "Upsert row(s)"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "qX3cbCdhRcGzgh8g",
+          "cachedResultUrl": "/workflow/qX3cbCdhRcGzgh8g",
+          "cachedResultName": "tokens"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "model_names": "={{ [\"openai\"] }}",
+            "excecution_id": "={{ $execution.id }}",
+            "message_id": "={{ $item(\"0\").$node[\"Call 'event'\"].json[\"message_id\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "excecution_id",
+              "displayName": "excecution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "model_names",
+              "displayName": "model_names",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "5ded5ee1-e831-418d-aac3-6628f89c2734",
+      "name": "Call 'tokens'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        1264,
+        -16
+      ],
+      "typeVersion": 1.2,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Call 'event'",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'event'": {
+      "main": [
+        [
+          {
+            "node": "Call 'tokens'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "oDyev90Kbv6yIRNf",
+  "active": false
+}

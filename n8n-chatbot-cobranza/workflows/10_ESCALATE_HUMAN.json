@@ -1,0 +1,642 @@
+{
+  "name": "ESCALATE_HUMAN",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "=Bienvenido, déjame conectarte con un asesor y en un momento te atenderán."
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        96,
+        -112
+      ],
+      "id": "c63ad7d6-11fc-4a77-a31e-2caea7ea3cf8",
+      "name": "enviar_respuesta_directa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assignee_id",
+              "value": "={{ $json.assignee_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        256,
+        -1072
+      ],
+      "id": "b732db18-195a-4c42-82c6-a55cb34d3271",
+      "name": "asignar a un agente"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = [1, 2, 3, 4, 5, 6];\nconst selected = agents[Math.floor(Math.random() * agents.length)];\n\nreturn [{ json: { assignee_id: selected } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        -1072
+      ],
+      "id": "c416a610-1ca4-48b5-a5e3-eebc3edf2828",
+      "name": "code_asignar usuario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"pending\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        464,
+        -1072
+      ],
+      "id": "8bfa18e1-2389-4618-a206-c9728ee3fc46",
+      "name": "pending_conversacion_chatwoot1"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "contact_id",
+              "type": "number"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -128,
+        -112
+      ],
+      "id": "811247cc-836c-4a45-82fb-a0ef7d8a4023",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"labels\": {{ JSON.stringify($json.labels) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        816,
+        -192
+      ],
+      "id": "13e08dbd-a912-406b-817a-4172110046f2",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const etiquetaAQuitar = \"ops-agent\";\nconst etiquetasActuales = $input.first().json.payload || [];\nconst nuevasEtiquetas = etiquetasActuales.filter(l => l !== etiquetaAQuitar);\nreturn [{ json: { labels: nuevasEtiquetas } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -192
+      ],
+      "id": "60c47933-3cb9-4575-b291-d872f4596f08",
+      "name": "merge_etiquetas"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        -192
+      ],
+      "id": "b3adbb22-3366-4df1-9fb6-0f0e05f05d36",
+      "name": "get_etiquetas_actuales"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "16b8e5b0-6ce7-4c7a-81ef-1d57e8c3e6e4",
+              "leftValue": "={{ $item(\"0\").$node[\"asignar a un agente1\"].json[\"availability_status\"] }}",
+              "rightValue": "offline",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        112
+      ],
+      "id": "195c310e-ec97-44e9-b22a-a7c6d30f62ef",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = $now.setZone('America/Mexico_City');\nconst h = now.hour;\nconst m = now.minute;\nconst dow = now.weekday;\nconst mins = h * 60 + m;\n\n// === HORARIOS DE ATENCIÓN ===\nconst enHorario = (() => {\n  if (dow >= 1 && dow <= 5) return mins >= 480 && mins < 1200; // L-V 8am-8pm\n  if (dow === 6)            return mins >= 540 && mins < 840;  // Sab 9am-2pm\n  return false;\n})();\n\nif (enHorario) {\n  // Estamos en horario pero no hay agente online — NO forzamos, dejamos pasar\n  // (esto no debería pasar normalmente, pero si pasa, terminamos sin asignar)\n  return [{ json: { asignado: false, motivo: 'en_horario_sin_agente_disponible' } }];\n}\n\n// Fuera de horario: forzamos el primer agente aunque esté offline\nconst agentes = [85, 86, 12, 23, 88, 42];\nconst assignee_id = agentes[Math.floor(Math.random() * agentes.length)];\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    assignee_id,\n    asignado: true,\n    forzado_offline: true,\n    motivo: 'fuera_de_horario_asignado_offline'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        176
+      ],
+      "id": "416bf2ed-6bf1-4277-b6bf-14dcdddb66d8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2fb61e76-8566-4f75-ac2b-be22e575148a",
+              "leftValue": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"forzado_offline\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1056,
+        176
+      ],
+      "id": "f7ec427f-4150-4f70-86d1-9fa0a1c7d722",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $('Webhook').item.json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "c0b5a969-94fe-45f2-84d8-93106588cbf2",
+      "name": "Delete row(s)2",
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assignee_id",
+              "value": "={{ $json.assignee_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        112
+      ],
+      "id": "90952153-5143-46e1-9941-412a148836e2",
+      "name": "asignar a un agente1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = [1, 2, 3, 4, 5, 6];\nconst selected = agents[Math.floor(Math.random() * agents.length)];\n\nreturn [{\n  json: {\n    ...$input.first().json,        // preserva todo el json original\n    assignee_id: selected\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        112
+      ],
+      "id": "e89be0ef-0560-4891-b80c-a6e17387db84",
+      "name": "code_asignar usuario1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"pending\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "6ea82dfc-a012-40af-b94f-f7ca7761c05f",
+      "name": "pending_conversacion_chatwoot"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1496611853,
+          "mode": "list",
+          "cachedResultName": "escalation + TCC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "fecha": "={{ $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd') }}",
+            "tipo_cierre": "AGENTE",
+            "agente_destino": "={{ $item(\"0\").$node[\"asignar a un agente1\"].json[\"id\"] }}",
+            "origen_escalacion ": "ORQUESTADOR"
+          },
+          "matchingColumns": [
+            "conversation_id"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo_cierre",
+              "displayName": "tipo_cierre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "agente_destino",
+              "displayName": "agente_destino",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "origen_escalacion ",
+              "displayName": "origen_escalacion ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "8065301f-653d-4358-96b0-4cc42d62ee38",
+      "name": "Append or update row in sheet",
+      "retryOnFail": true,
+      "alwaysOutputData": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "enviar_respuesta_directa": {
+      "main": [
+        [
+          {
+            "node": "get_etiquetas_actuales",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "code_asignar usuario1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "asignar a un agente": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code_asignar usuario": {
+      "main": [
+        [
+          {
+            "node": "asignar a un agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "enviar_respuesta_directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge_etiquetas": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_etiquetas_actuales": {
+      "main": [
+        [
+          {
+            "node": "merge_etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "code_asignar usuario1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "asignar a un agente1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code_asignar usuario1": {
+      "main": [
+        [
+          {
+            "node": "asignar a un agente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pending_conversacion_chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Delete row(s)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "4ztb3NcT24May395",
+  "active": false
+}

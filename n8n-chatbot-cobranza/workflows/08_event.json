@@ -1,0 +1,1624 @@
+{
+  "name": "event",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5efe924c-9e85-4cec-aa06-f309c9778ce5",
+              "leftValue": "={{ $('Webhook').item.json.total_messages }}",
+              "rightValue": "=7",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "2db16c2f-9a20-4f7e-a469-f81964950b4f",
+              "leftValue": "={{ $('Webhook').item.json.mensaje }}\n",
+              "rightValue": "=CERRAR",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e4b23c08-2dc9-4c21-b75b-a816af282090",
+              "leftValue": "={{ $('Webhook').item.json.mensaje }}",
+              "rightValue": "cerrar",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "a49aff9f-6294-4d7b-82fb-f221859fcc7d",
+              "leftValue": "={{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"output\"][\"cerrar_conversacion\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2288,
+        16
+      ],
+      "id": "1137ed13-9905-4a38-8dc6-d15b75de62e8",
+      "name": "filtro_cerrar_o_limite_mensajes"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"resolved\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3392,
+        -112
+      ],
+      "id": "6506d81a-b102-4399-a158-778ad45cac83",
+      "name": "cerrar_conversacion_chatwoot"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=TIPO DE CLIENTE: {{ $json.route_type }}\nDEBE ESCALAR A HUMANO:{{ ($json.should_escalate === true || $json.should_escalate === 'true') ? 'SÍ (responde brevemente y anuncia que transfieres)' : 'no' }}\n\n{{ $json.context_block }}\n\nHISTORIAL DE CONVERSACIÓN:\n{{ $json.historial || 'Sin historial previo (primer mensaje de esta conversación)' }}\n\nMENSAJE DEL CLIENTE:\n{{ $json.mensaje }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "={{ $item(\"0\").$node[\"Webhook\"].json[\"system_prompt\"] }}",
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        784,
+        32
+      ],
+      "id": "b6d82994-4046-40d9-b075-569267c3a506",
+      "name": "AI Agent",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "Claude Haiku 4.5"
+        },
+        "options": {
+          "maxTokensToSample": 2000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        864,
+        336
+      ],
+      "id": "ba0628d6-e635-428b-aeae-760818bff83c",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        32
+      ],
+      "id": "28f6f734-9bad-43f1-aec8-31c4e28d9e0e",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "={{ ($json.output.messages || []).join('\\n\\n') }}"
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1472,
+        -336
+      ],
+      "id": "597a44ca-7c30-437b-9e9e-624d883ebdb7",
+      "name": "enviar_respuesta_directa",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1008,
+        -432
+      ],
+      "id": "f71aee5b-4353-4a09-a626-c5a68c5c35fc",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('split_messages').item.json.delay_seconds }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1648,
+        -304
+      ],
+      "id": "d3eec095-9a8e-41dc-bfc6-1edd7c21db62",
+      "name": "Wait"
+    },
+    {
+      "parameters": {
+        "jsCode": "const messages = $json.output.messages || [];\n\nconst chunks = messages.map((content, i) => {\n  // primer mensaje sin delay\n  if (i === 0) {\n    return { content, delay_seconds: 0.2 };\n  }\n\n  const base = Math.max(800, Math.min(2500, content.length * 25));\n  const jitter = base * 0.2 * (Math.random() * 2 - 1);\n  const delay_seconds = (base + jitter) / 1000;\n\n  return { content, delay_seconds: Math.round(delay_seconds * 100) / 100 };\n});\n\nreturn chunks.map(c => ({ json: c }));\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -416
+      ],
+      "id": "6bd439e8-5be5-4075-8a4f-071e58d306fe",
+      "name": "split_messages"
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $('Webhook').item.json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2560,
+        -112
+      ],
+      "id": "4d55364a-1a57-4126-8687-38bdb96c7607",
+      "name": "Delete row(s)",
+      "alwaysOutputData": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1843636b-4729-4f80-a3e3-77a8a1af638b",
+              "leftValue": "={{ $('Webhook').first().json.should_escalate === true || $('Webhook').first().json.should_escalate === 'true' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "94e49c6c-b347-4ccf-85d7-e180571de9d7",
+              "leftValue": "={{ $('Code in JavaScript1').first().json.output.escalate_to_human }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1872,
+        16
+      ],
+      "id": "043c387f-5074-481c-8aaf-67c91619ecb4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assignee_id",
+              "value": "={{ $json.assignee_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2768,
+        -496
+      ],
+      "id": "7cf8a9d7-3f29-4039-8941-d7cf3c1ea101",
+      "name": "asignar a un agente"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = [1, 2, 3, 4, 5, 6];\nconst selected = agents[Math.floor(Math.random() * agents.length)];\n\nreturn [{\n  json: {\n    ...$input.first().json,        // preserva todo el json original\n    assignee_id: selected\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -1040
+      ],
+      "id": "a1a207e4-44a3-4daa-b7e3-30cae642a7f0",
+      "name": "code_asignar usuario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"pending\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3056,
+        -496
+      ],
+      "id": "40fa4a4c-1253-48b2-a749-f1d8967f245a",
+      "name": "pending_conversacion_chatwoot1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"labels\": {{ JSON.stringify($json.labels) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3792,
+        -496
+      ],
+      "id": "a9a6b818-b39d-40a9-a060-42cbf943f834",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const etiquetaAQuitar = \"ops-agent\";\nconst etiquetasActuales = $input.first().json.payload || [];\nconst nuevasEtiquetas = etiquetasActuales.filter(l => l !== etiquetaAQuitar);\nreturn [{ json: { labels: nuevasEtiquetas } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        -496
+      ],
+      "id": "d3b18f38-f1c0-405b-b4ee-477d1872485e",
+      "name": "merge_etiquetas"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3328,
+        -496
+      ],
+      "id": "92160802-a977-4e33-b46d-55d81ea90a57",
+      "name": "get_etiquetas_actuales"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $fromAI('query', 'The SQL SELECT query to execute', 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        1088,
+        336
+      ],
+      "id": "26c12c4d-1c2a-482b-8306-bdd44457f671",
+      "name": "Execute a SQL query in Postgres"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "16b8e5b0-6ce7-4c7a-81ef-1d57e8c3e6e4",
+              "leftValue": "={{ $item(\"0\").$node[\"asignar a un agente\"].json[\"availability_status\"] }}",
+              "rightValue": "offline",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1504,
+        -1040
+      ],
+      "id": "3963fc78-61c3-42a0-8734-6cc335eba569",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        656,
+        368
+      ],
+      "id": "dfa8850f-2c8b-43d6-b2b1-04f48be35776",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = $now.setZone('America/Mexico_City');\nconst h = now.hour;\nconst m = now.minute;\nconst dow = now.weekday;\nconst mins = h * 60 + m;\n\n// === HORARIOS DE ATENCIÓN ===\nconst enHorario = (() => {\n  if (dow >= 1 && dow <= 5) return mins >= 480 && mins < 1200; // L-V 8am-8pm\n  if (dow === 6)            return mins >= 540 && mins < 840;  // Sab 9am-2pm\n  return false;\n})();\n\nif (enHorario) {\n  // Estamos en horario pero no hay agente online — NO forzamos, dejamos pasar\n  // (esto no debería pasar normalmente, pero si pasa, terminamos sin asignar)\n  return [{ json: { asignado: false, motivo: 'en_horario_sin_agente_disponible' } }];\n}\n\n// Fuera de horario: forzamos el primer agente aunque esté offline\nconst agentes = [85, 86, 12, 23, 88, 42];\nconst assignee_id = agentes[Math.floor(Math.random() * agentes.length)];\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    assignee_id,\n    asignado: true,\n    forzado_offline: true,\n    motivo: 'fuera_de_horario_asignado_offline'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -976
+      ],
+      "id": "63edd807-2e8f-4025-bf9f-d0b3ee4a5a3d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lee el texto crudo que devuelve el AI Agent\nconst item = $input.first().json;\n\n// El AI Agent de n8n mete la respuesta en .output (string o objeto)\nconst rawOutput = item.output;\n\nlet parsed;\n\n// Intento 1: ya es objeto con las keys correctas\nif (rawOutput && typeof rawOutput === 'object' && Array.isArray(rawOutput.messages)) {\n  parsed = rawOutput;\n}\n\n// Intento 2: es string — extraer el JSON de adentro\nif (!parsed) {\n  const str = typeof rawOutput === 'string' \n    ? rawOutput \n    : JSON.stringify(rawOutput ?? item);\n  \n  // Buscar el primer { y el último } para extraer solo el JSON\n  const start = str.indexOf('{');\n  const end = str.lastIndexOf('}');\n  \n  if (start !== -1 && end !== -1 && end > start) {\n    try {\n      parsed = JSON.parse(str.slice(start, end + 1));\n    } catch(e) {\n      parsed = null;\n    }\n  }\n}\n\n// Fallback seguro si todo falla\nif (!parsed || !Array.isArray(parsed.messages) || parsed.messages.length === 0) {\n  parsed = {\n    needs_query: false,\n    query: \"\",\n    escalate_to_human: false,\n    cerrar_conversacion: false,\n    messages: [\"Un momento, enseguida te ayudo 🙏\"],\n    reasoning: \"fallback por error de parseo\"\n  };\n}\n\n// Sanitizar tipos\nparsed.needs_query = parsed.needs_query === true;\nparsed.escalate_to_human = parsed.escalate_to_human === true;\nparsed.cerrar_conversacion = parsed.cerrar_conversacion === true;\nparsed.query = typeof parsed.query === 'string' ? parsed.query : \"\";\nparsed.messages = parsed.messages.map(m => String(m)).filter(m => m.length > 0);\n\nreturn [{ json: { output: parsed } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        32
+      ],
+      "id": "dc28b289-ff67-42e4-8494-a487ee406e1b",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2fb61e76-8566-4f75-ac2b-be22e575148a",
+              "leftValue": "={{ $item(\"0\").$node[\"Code in JavaScript\"].json[\"forzado_offline\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        -976
+      ],
+      "id": "369294f2-6545-40e3-b384-59a23ebff1ec",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $('Webhook').item.json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4096,
+        -496
+      ],
+      "id": "dc5872f0-005d-4c70-b112-01b6244eca3a",
+      "name": "Delete row(s)2",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "qX3cbCdhRcGzgh8g",
+          "cachedResultUrl": "/workflow/qX3cbCdhRcGzgh8g",
+          "cachedResultName": "tokens"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "model_names": "={{ [\"openai\"] }}",
+            "excecution_id": "={{ $execution.id }}",
+            "message_id": "={{ $item(\"0\").$node[\"Webhook\"].json[\"message_id\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "excecution_id",
+              "displayName": "excecution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "model_names",
+              "displayName": "model_names",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "f2cea4dc-7f08-40bd-8fa9-7498346d25f6",
+      "name": "Call 'tokens'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        4480,
+        32
+      ],
+      "typeVersion": 1.2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1496611853,
+          "mode": "list",
+          "cachedResultName": "escalation + TCC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "tipo_cierre": "AGENTE",
+            "fecha": "={{ $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd') }}",
+            "agente_destino": "={{ $item(\"0\").$node[\"asignar a un agente\"].json[\"id\"] }}",
+            "origen_escalacion ": "EVENT",
+            "motivo": "={{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"output\"][\"reasoning\"] }}"
+          },
+          "matchingColumns": [
+            "conversation_id"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo_cierre",
+              "displayName": "tipo_cierre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "agente_destino",
+              "displayName": "agente_destino",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "origen_escalacion ",
+              "displayName": "origen_escalacion ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4720,
+        -496
+      ],
+      "id": "b106e148-8c5b-43a7-b08b-aff5dc291d96",
+      "name": "Append or update row in sheet",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1496611853,
+          "mode": "list",
+          "cachedResultName": "escalation + TCC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "fecha": "={{ $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd') }}",
+            "tipo_cierre": "BOT"
+          },
+          "matchingColumns": [
+            "conversation_id"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo_cierre",
+              "displayName": "tipo_cierre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "agente_destino",
+              "displayName": "agente_destino",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4496,
+        -96
+      ],
+      "id": "d5d47a92-c245-4814-819b-348605bf3b85",
+      "name": "Append or update row in sheet1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "escalation_log"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "agente_destino": "={{ $item(\"0\").$node[\"asignar a un agente\"].json[\"id\"] }}",
+            "tipo_cierre": "AGENTE",
+            "motivo": "={{ $item(\"0\").$node[\"Code in JavaScript1\"].json[\"output\"][\"reasoning\"] }}",
+            "ORIGEN": "EVENT"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tipo_cierre",
+              "displayName": "tipo_cierre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "agente_destino",
+              "displayName": "agente_destino",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "ORIGEN",
+              "displayName": "ORIGEN",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4512,
+        -496
+      ],
+      "id": "84ddec4e-692f-4c6b-a152-30eae48a02ce",
+      "name": "Upsert row(s)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "conversations",
+          "mode": "list",
+          "cachedResultName": "conversations"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "assignee_agent_bot_id": "={{ $item(\"0\").$node[\"asignar a un agente\"].json[\"id\"] }}",
+            "display_id": "={{ $item(\"0\").$node[\"Webhook\"].json[\"conversation_id\"] }}"
+          },
+          "matchingColumns": [
+            "display_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "account_id",
+              "displayName": "account_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "inbox_id",
+              "displayName": "inbox_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "assignee_id",
+              "displayName": "assignee_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "display_id",
+              "displayName": "display_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contact_last_seen_at",
+              "displayName": "contact_last_seen_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "agent_last_seen_at",
+              "displayName": "agent_last_seen_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "additional_attributes",
+              "displayName": "additional_attributes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "contact_inbox_id",
+              "displayName": "contact_inbox_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "uuid",
+              "displayName": "uuid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "identifier",
+              "displayName": "identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last_activity_at",
+              "displayName": "last_activity_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "campaign_id",
+              "displayName": "campaign_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "snoozed_until",
+              "displayName": "snoozed_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "custom_attributes",
+              "displayName": "custom_attributes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "assignee_last_seen_at",
+              "displayName": "assignee_last_seen_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first_reply_created_at",
+              "displayName": "first_reply_created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "sla_policy_id",
+              "displayName": "sla_policy_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "waiting_since",
+              "displayName": "waiting_since",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "cached_label_list",
+              "displayName": "cached_label_list",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "assignee_agent_bot_id",
+              "displayName": "assignee_agent_bot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4320,
+        -736
+      ],
+      "id": "e060f954-b148-4814-8bb4-18df7817a318",
+      "name": "Update rows in a table",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const humanPool = [85, 86, 12, 23, 88, 42];\n\n// el GET regresa un array de agentes (un item por agente en n8n)\nconst list = $('get_agentes').all().map(i => i.json);\n\nconst online = list\n  .filter(a => humanPool.includes(a.id) && a.availability_status === 'online')\n  .map(a => a.id);\n\nconst pool = online.length > 0 ? online : humanPool;   // fallback: nadie online → random igual\nconst selected = pool[Math.floor(Math.random() * pool.length)];\n\nreturn [{\n  json: {\n    //$('Webhook').first().json,   // conservamos la conversación original\n    assignee_id: selected,\n    online_count: online.length     // útil para debug / futura métrica\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        -480
+      ],
+      "id": "4cb86fc8-b825-4eb1-bb97-78257be7be68",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/agents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2208,
+        -480
+      ],
+      "id": "242889e2-8d3c-4c44-8787-b7180336be81",
+      "name": "get_agentes"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "={{ ($json.output.messages || []).join('\\n\\n') }}"
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        32
+      ],
+      "id": "bc482c38-5398-4f5b-8f92-4e9c1b3f6751",
+      "name": "enviar_respuesta_directa1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5
+    }
+  ],
+  "connections": {
+    "filtro_cerrar_o_limite_mensajes": {
+      "main": [
+        [
+          {
+            "node": "Delete row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'tokens'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "enviar_respuesta_directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_respuesta_directa": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split_messages": {
+      "main": [
+        []
+      ]
+    },
+    "Delete row(s)": {
+      "main": [
+        [
+          {
+            "node": "cerrar_conversacion_chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "get_agentes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "filtro_cerrar_o_limite_mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "asignar a un agente": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code_asignar usuario": {
+      "main": [
+        []
+      ]
+    },
+    "merge_etiquetas": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_etiquetas_actuales": {
+      "main": [
+        [
+          {
+            "node": "merge_etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pending_conversacion_chatwoot1": {
+      "main": [
+        [
+          {
+            "node": "get_etiquetas_actuales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query in Postgres": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "enviar_respuesta_directa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [],
+        [
+          {
+            "node": "code_asignar usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Delete row(s)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cerrar_conversacion_chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Call 'tokens'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete row(s)2": {
+      "main": [
+        [
+          {
+            "node": "Call 'tokens'",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Append or update row in sheet1": {
+      "main": [
+        []
+      ]
+    },
+    "Upsert row(s)": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update rows in a table": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "asignar a un agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_agentes": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_respuesta_directa1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "HbEUMo0jU5ibmXMC",
+  "active": false
+}

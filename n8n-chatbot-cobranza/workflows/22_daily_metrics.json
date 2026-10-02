@@ -1,0 +1,1858 @@
+{
+  "name": "daily_metrics",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -304,
+        768
+      ],
+      "id": "35a2527c-8391-4ec6-ae1a-a3afb7d92ce9",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "eventos",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        176,
+        -256
+      ],
+      "id": "61fe0ece-b923-45b9-8b83-2db9f82ecdef",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1850747103,
+          "mode": "list",
+          "cachedResultName": "eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "clear": "specificRows",
+        "startIndex": 2,
+        "rowsToDelete": 1000
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        160,
+        48
+      ],
+      "id": "b217d37a-1882-4209-af34-4fe3249a7f62",
+      "name": "Clear sheet"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1850747103,
+          "mode": "list",
+          "cachedResultName": "eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "agent_id",
+              "displayName": "agent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "from_status",
+              "displayName": "from_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "to_status",
+              "displayName": "to_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "changed_at",
+              "displayName": "changed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        48
+      ],
+      "id": "7c322d39-625c-4dba-a961-21504b6176dc",
+      "name": "Append row in sheet1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const CUTOFF = new Date(); // cierre del día: ahora (23:55)\nconst CONNECTED = ['online', 'busy']; // busy cuenta como conectado\nconst TZ = 'America/Mexico_City';\n\n// Formatear timestamps en hora CDMX, legible para el sheet\nconst fmtCDMX = (d) =>\n  DateTime.fromJSDate(d).setZone(TZ).toFormat('yyyy-MM-dd HH:mm:ss');\n\nconst events = $input.all()\n  .map(i => i.json)\n  .filter(e => e.agent_id !== undefined && e.agent_id !== '')\n  .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));\n\n// Agrupar por agente\nconst byAgent = {};\nfor (const e of events) {\n  const id = String(e.agent_id);\n  if (!byAgent[id]) byAgent[id] = { name: e.name, events: [] };\n  byAgent[id].events.push(e);\n}\n\nconst fecha = DateTime.fromJSDate(CUTOFF).setZone(TZ).toFormat('yyyy-MM-dd');\nconst out = [];\n\nfor (const [agentId, data] of Object.entries(byAgent)) {\n  let sessionStart = null;\n  let totalMs = 0;\n  let numSesiones = 0;\n  let primera = null;\n  let ultima = null;\n\n  for (const e of data.events) {\n    const t = new Date(e.changed_at);\n    const isConnected = CONNECTED.includes(e.to_status);\n\n    if (isConnected && !sessionStart) {\n      sessionStart = t;\n      if (!primera) primera = t;\n    } else if (!isConnected && sessionStart) {\n      totalMs += t - sessionStart;\n      numSesiones++;\n      ultima = t;\n      sessionStart = null;\n    }\n  }\n\n  // Sesión aún abierta al cierre del día\n  let sigueConectado = false;\n  if (sessionStart) {\n    totalMs += CUTOFF - sessionStart;\n    numSesiones++;\n    sigueConectado = true;\n  }\n\n  out.push({\n    json: {\n      id_agente: `${fecha}_${agentId}`,\n      fecha,\n      agent_id: Number(agentId),\n      name: data.name,\n      horas_conectado: Math.round((totalMs / 3600000) * 100) / 100,\n      num_sesiones: numSesiones,\n      primera_conexion: primera ? fmtCDMX(primera) : '',\n      ultima_desconexion: sigueConectado ? 'sigue conectado' : (ultima ? fmtCDMX(ultima) : ''),\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -256
+      ],
+      "id": "301a64e5-e533-4c8c-941c-8fe3b2172ba2",
+      "name": "Calcular horas"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Re-sembrar evento de apertura para agentes que siguen conectados\nconst CONNECTED = ['online', 'busy'];\nconst now = DateTime.now().setZone('America/Mexico_City').toISO();\n\n// Leemos el resumen calculado: quien quedó \"sigue conectado\"\nconst abiertos = $('Calcular horas').all()\n  .map(i => i.json)\n  .filter(r => r.ultima_desconexion === 'sigue conectado');\n\nreturn abiertos.map(r => ({\n  json: {\n    agent_id: r.agent_id,\n    name: r.name,\n    from_status: null,\n    to_status: 'online',\n    changed_at: now,\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        48
+      ],
+      "id": "1a8de0ce-9622-4797-bd6d-05ae33ccd900",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    to_char((now() AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS fecha,\n    COUNT(*)::int AS total_conversaciones\nFROM conversations\nWHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'America/Mexico_City')::date;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        -432
+      ],
+      "id": "b2427cf3-3cb7-49c1-99bd-c5d56685048b",
+      "name": "Execute a SQL query"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    to_char((now() AT TIME ZONE 'America/Mexico_City')::date, 'YYYY-MM-DD') AS fecha,\n    COUNT(*) FILTER (WHERE assignee_id = 3)::int  AS \"Agente 3\",\n    COUNT(*) FILTER (WHERE assignee_id = 4)::int  AS \"Agente 4\",\n    COUNT(*) FILTER (WHERE assignee_id = 6)::int  AS \"Agente 6\",\n    COUNT(*) FILTER (WHERE assignee_id = 1)::int  AS \"Agente 1\",\n    COUNT(*) FILTER (WHERE assignee_id = 2)::int  AS \"Agente 2\",\n    COUNT(*) FILTER (WHERE assignee_id = 5)::int  AS \"Agente 5\",\n    COUNT(*) FILTER (WHERE assignee_id = 99)::int  AS \"agente n8n\",\n    COUNT(*) FILTER (WHERE assignee_id IS NULL)::int AS \"sin asignar\",\n    COUNT(*)::int AS \"Total general\"\nFROM conversations\nWHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'America/Mexico_City')::date;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        -608
+      ],
+      "id": "5dbe9dc1-67b5-4c06-bc48-74a0428fdae4",
+      "name": "Execute a SQL query1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    to_char((now() AT TIME ZONE 'America/Mexico_City')::date - 1, 'YYYY-MM-DD') AS fecha,\n    COUNT(*) FILTER (WHERE status = 1 AND first_reply_created_at IS NOT NULL)::int AS cerradas_con_resp,\n    COUNT(*) FILTER (WHERE status = 1 AND first_reply_created_at IS NULL)::int     AS cerradas_sin_resp,\n    COUNT(*) FILTER (WHERE status = 2 AND first_reply_created_at IS NOT NULL)::int AS pendientes_con_resp,\n    COUNT(*) FILTER (WHERE status = 2 AND first_reply_created_at IS NULL)::int     AS pendientes_sin_resp\nFROM conversations\nWHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'America/Mexico_City')::date - 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        192,
+        640
+      ],
+      "id": "731f7a37-c1dc-4523-8757-4edba625dfef",
+      "name": "Execute a SQL query2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    to_char((now() AT TIME ZONE 'America/Mexico_City')::date - 1, 'YYYY-MM-DD') AS fecha,\n    COUNT(*) FILTER (WHERE status = 2)::int AS pendientes_total,\n    COUNT(*) FILTER (WHERE status = 2 AND first_reply_created_at IS NOT NULL)::int AS pendientes_con_resp,\n    COUNT(*) FILTER (WHERE status = 2 AND first_reply_created_at IS NULL)::int     AS pendientes_sin_resp\nFROM conversations\nWHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'America/Mexico_City')::date - 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        176,
+        832
+      ],
+      "id": "e74f5889-93fc-415d-8bac-ddf776cff0df",
+      "name": "Execute a SQL query3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  to_char(\n    (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date,\n    'YYYY-MM-DD' \n  ) AS fecha,\n  COUNT(*)::int AS entradas,\n  COUNT(*) FILTER (WHERE assignee_id = 99)::int AS resueltas_bot,\n  COUNT(*) FILTER (WHERE assignee_id IS NOT NULL AND assignee_id <> 26)::int AS escaladas_humano,\n  COUNT(*) FILTER (WHERE assignee_id IS NULL)::int AS sin_asignar,\n  ROUND(\n    COUNT(*) FILTER (WHERE assignee_id = 99)::numeric\n    / NULLIF(COUNT(*), 0),\n    4\n  ) AS cobertura_bot\nFROM conversations\nWHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date - 1\nGROUP BY 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        176,
+        1040
+      ],
+      "id": "3a0fc4db-098d-410d-91e8-620ff30c5af3",
+      "name": "Execute a SQL query4"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1645859023,
+          "mode": "list",
+          "cachedResultName": "event_tokens",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        1472
+      ],
+      "id": "4dc5e881-0e5b-485d-bc30-9a5d109f4bd2",
+      "name": "Get row(s) in sheet3",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nif (rows.length === 0) {\n  return [{ json: { fecha: $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd'),\n    sin_datos: true } }];\n}\n\nconst num = v => Number(v) || 0;\n\n// Totales del día\nlet totalTokens = 0, totalPrompt = 0, totalCompletion = 0, totalCost = 0;\nconst conversaciones = new Set();\nconst mensajes = new Set();\n\n// Desglose por workflow\nconst porWorkflow = {};\n\nfor (const r of rows) {\n  totalTokens += num(r.totalTokens);\n  totalPrompt += num(r.promptTokens);\n  totalCompletion += num(r.completionTokens);\n  totalCost += num(r.cost_usd);\n\n  if (r.conversation_id) conversaciones.add(String(r.conversation_id));\n  if (r.message_key) mensajes.add(String(r.message_key));\n\n  const wf = r.workflow_name || 'desconocido';\n  if (!porWorkflow[wf]) porWorkflow[wf] = { tokens: 0, cost: 0 };\n  porWorkflow[wf].tokens += num(r.totalTokens);\n  porWorkflow[wf].cost += num(r.cost_usd);\n}\n\nconst nConv = conversaciones.size || 1;  // evitar división entre 0\nconst nMsg = mensajes.size || 1;\nconst r6 = x => Math.round(x * 1e6) / 1e6;\nconst r2 = x => Math.round(x * 100) / 100;\n\nconst fecha = rows[0].fecha || $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd');\n\nreturn [{\n  json: {\n    fecha,\n    conversaciones: conversaciones.size,\n    mensajes: mensajes.size,\n    total_tokens: totalTokens,\n    prompt_tokens: totalPrompt,\n    completion_tokens: totalCompletion,\n    costo_total_usd: r6(totalCost),\n    // Las dos métricas que buscas:\n    costo_por_conversacion_usd: r6(totalCost / nConv),\n    costo_por_mensaje_usd: r6(totalCost / nMsg),\n    tokens_por_conversacion: r2(totalTokens / nConv),\n    tokens_por_mensaje: r2(totalTokens / nMsg),\n    // Desglose por agente\n    tokens_orquestador: porWorkflow['agente_orquestador']?.tokens || 0,\n    tokens_event: porWorkflow['event']?.tokens || 0,\n    costo_orquestador_usd: r6(porWorkflow['agente_orquestador']?.cost || 0),\n    costo_event_usd: r6(porWorkflow['event']?.cost || 0)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1552
+      ],
+      "id": "11f62705-8e72-434c-b436-ae448f253e11",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 709642046,
+          "mode": "list",
+          "cachedResultName": "resume_tokens",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversaciones",
+              "displayName": "conversaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensajes",
+              "displayName": "mensajes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_tokens",
+              "displayName": "total_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "prompt_tokens",
+              "displayName": "prompt_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "completion_tokens",
+              "displayName": "completion_tokens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo_total_usd",
+              "displayName": "costo_total_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo_por_conversacion_usd",
+              "displayName": "costo_por_conversacion_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo_por_mensaje_usd",
+              "displayName": "costo_por_mensaje_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tokens_por_conversacion",
+              "displayName": "tokens_por_conversacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tokens_por_mensaje",
+              "displayName": "tokens_por_mensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tokens_orquestador",
+              "displayName": "tokens_orquestador",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tokens_event",
+              "displayName": "tokens_event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo_orquestador_usd",
+              "displayName": "costo_orquestador_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo_event_usd",
+              "displayName": "costo_event_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        1552
+      ],
+      "id": "bd92c27b-882c-47fc-93ce-d4614ae11fb7",
+      "name": "Append row in sheet9"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1383247806,
+          "mode": "list",
+          "cachedResultName": "orquestador_tokens",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        1664
+      ],
+      "id": "14c35d2d-d423-438d-ad57-a324e5bb28e3",
+      "name": "Get row(s) in sheet4",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        512,
+        1552
+      ],
+      "id": "9fc2c5b3-cb20-4f3c-b56b-39d8b802ea91",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  to_char(\n    (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date,\n    'YYYY-MM-DD'\n  ) AS fecha,\n  COUNT(*) FILTER (WHERE user_id = 99)::int AS cerradas_bot,\n  COUNT(*) FILTER (WHERE user_id IN (3,7,4,6,1,2,5))::int AS cerradas_humano,\n  COUNT(*) FILTER (WHERE user_id IS NULL)::int AS cerradas_sistema,\n  COUNT(*)::int AS total_cierres\nFROM reporting_events\nWHERE name = 'conversation_resolved'\n  AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date\n      = (now() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Mexico_City')::date - 1\nGROUP BY 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        1840
+      ],
+      "id": "8e00b4f4-2c4f-4772-ba87-534faf29203d",
+      "name": "Execute a SQL query5"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 678616028,
+          "mode": "list",
+          "cachedResultName": "resumen_close",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cerradas_bot",
+              "displayName": "cerradas_bot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cerradas_humano",
+              "displayName": "cerradas_humano",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cerradas_sistema",
+              "displayName": "cerradas_sistema",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_cierres",
+              "displayName": "total_cierres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        1840
+      ],
+      "id": "58992122-6d83-4365-86af-c8a927018079",
+      "name": "resumen_close"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1383247806,
+          "mode": "list",
+          "cachedResultName": "orquestador_tokens",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "clear": "specificRows",
+        "startIndex": 2,
+        "rowsToDelete": 10000
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        1440
+      ],
+      "id": "14aaec92-82e9-469e-b61d-fe13150bebe5",
+      "name": "orquestador_tokens"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1645859023,
+          "mode": "list",
+          "cachedResultName": "event_tokens",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "clear": "specificRows",
+        "startIndex": 2,
+        "rowsToDelete": 10000
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        1648
+      ],
+      "id": "833ca054-5adf-4f18-84fd-2653d0ad40cc",
+      "name": "event_tokens"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1613235081,
+          "mode": "list",
+          "cachedResultName": "resumen_diario ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "entradas",
+              "displayName": "entradas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resueltas_bot",
+              "displayName": "resueltas_bot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "escaladas_humano",
+              "displayName": "escaladas_humano",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sin_asignar",
+              "displayName": "sin_asignar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cobertura_bot",
+              "displayName": "cobertura_bot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        1040
+      ],
+      "id": "c7ed5a29-c46b-4007-a509-8d7f333e9450",
+      "name": "resumen_diario"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1487016093,
+          "mode": "list",
+          "cachedResultName": "pendientes_total",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pendientes_total",
+              "displayName": "pendientes_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pendientes_con_resp",
+              "displayName": "pendientes_con_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pendientes_sin_resp",
+              "displayName": "pendientes_sin_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        832
+      ],
+      "id": "b1714a7d-bd9c-4965-a701-f85dadaffc31",
+      "name": "pendientes_total"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 833887746,
+          "mode": "list",
+          "cachedResultName": "TC_respuesta",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cerradas_con_resp",
+              "displayName": "cerradas_con_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cerradas_sin_resp",
+              "displayName": "cerradas_sin_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pendientes_con_resp",
+              "displayName": "pendientes_con_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pendientes_sin_resp",
+              "displayName": "pendientes_sin_resp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        432,
+        640
+      ],
+      "id": "9257769e-0edd-48f0-a14f-039f16407dbe",
+      "name": "TC_respuesta"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 916053999,
+          "mode": "list",
+          "cachedResultName": "TC_agente",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "fecha"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Agente 3",
+              "displayName": "Agente 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agente 4",
+              "displayName": "Agente 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agente 6",
+              "displayName": "Agente 6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agente 1",
+              "displayName": "Agente 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agente 2",
+              "displayName": "Agente 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agente 5",
+              "displayName": "Agente 5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agente n8n",
+              "displayName": "agente n8n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sin asignar",
+              "displayName": "sin asignar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TOTAL",
+              "displayName": "TOTAL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Total general",
+              "displayName": "Total general",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        432,
+        -608
+      ],
+      "id": "deccc860-8ff3-4e12-a42a-0246b893a653",
+      "name": "TC_agent"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2114953169,
+          "mode": "list",
+          "cachedResultName": "total_conversaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "fecha"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_conversaciones",
+              "displayName": "total_conversaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        -432
+      ],
+      "id": "46bbb6ed-f086-48ed-9fb6-706aa828d09f",
+      "name": "total_conversaciones"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1103298753,
+          "mode": "list",
+          "cachedResultName": "resumen_rl",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "id_agente"
+          ],
+          "schema": [
+            {
+              "id": "id_agente",
+              "displayName": "id_agente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_id",
+              "displayName": "agent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "horas_conectado",
+              "displayName": "horas_conectado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "num_sesiones",
+              "displayName": "num_sesiones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "primera_conexion",
+              "displayName": "primera_conexion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ultima_desconexion",
+              "displayName": "ultima_desconexion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        592,
+        -256
+      ],
+      "id": "422782a1-1c33-4f9f-acaa-5e861bf39824",
+      "name": "resumen"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2057866061,
+          "mode": "list",
+          "cachedResultName": "IGNORE_TC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        192,
+        2064
+      ],
+      "id": "4b2de3c2-7258-403d-a7dc-332a9758e8b3",
+      "name": "Get row(s) in sheet5",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ayer = DateTime.now()\n  .setZone('America/Mexico_City')\n  .minus({ days: 1 })\n  .toFormat('yyyy-MM-dd');\n\nconst rows = $input.all();\n\nlet total = 0;\nconst porMotivo = {};\nconst convsUnicas = new Set();\n\nfor (const item of rows) {\n  // Normaliza keys: quita espacios finales en headers (el clásico \"fecha \")\n  const row = {};\n  for (const [k, v] of Object.entries(item.json)) {\n    row[k.trim()] = typeof v === 'string' ? v.trim() : v;\n  }\n\n  // Normaliza la fecha a YYYY-MM-DD por si viene con hora o formato raro\n  const fechaRaw = String(row.fecha ?? '');\n  const fecha = fechaRaw.slice(0, 10);\n\n  if (fecha !== ayer) continue;\n\n  total++;\n  if (row.conversation_id) convsUnicas.add(String(row.conversation_id));\n\n  const motivo = (row.motivo || 'sin_motivo').toString().toLowerCase();\n  porMotivo[motivo] = (porMotivo[motivo] || 0) + 1;\n}\n\nreturn [{\n  json: {\n    fecha: ayer,\n    total_ignorados: total,\n    conversaciones_unicas: convsUnicas.size,\n    motivos: JSON.stringify(porMotivo)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        2064
+      ],
+      "id": "751780c6-0c2c-4073-995c-9a98208837df",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1496611853,
+          "mode": "list",
+          "cachedResultName": "escalation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "tipo_cierre",
+              "lookupValue": "AGENTE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        176,
+        2272
+      ],
+      "id": "fdb9e99e-023c-4664-9adf-e216278c5c7f",
+      "name": "Get row(s) in sheet6",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ayer = DateTime.now()\n  .setZone('America/Mexico_City')\n  .minus({ days: 1 })\n  .toFormat('yyyy-MM-dd');\n\nconst rows = $input.all();\n\nlet total = 0;\nconst porAgente = {};\nconst convsUnicas = new Set();\n\nfor (const item of rows) {\n  const row = {};\n  for (const [k, v] of Object.entries(item.json)) {\n    row[k.trim()] = typeof v === 'string' ? v.trim() : v;\n  }\n\n  // 1) filtrar por fecha\n  const fecha = String(row.fecha ?? '').slice(0, 10);\n  if (fecha !== ayer) continue;\n\n  // 2) filtrar por tipo de cierre — SOLO escalaciones a humano\n  if (String(row.tipo_cierre ?? '').trim() !== 'AGENTE') continue;\n\n  total++;\n  if (row.conversation_id) convsUnicas.add(String(row.conversation_id));\n\n  const agente = String(row.agente_destino ?? 'desconocido');\n  porAgente[agente] = (porAgente[agente] || 0) + 1;\n}\n\nreturn [{\n  json: {\n    fecha: ayer,\n    total_escalaciones: total,\n    conversaciones_unicas: convsUnicas.size,\n    por_agente: JSON.stringify(porAgente)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        2272
+      ],
+      "id": "afde01b7-6cd0-4cba-8109-1d0c423aa096",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1589591486,
+          "mode": "list",
+          "cachedResultName": "resumen_ignore",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_ignorados",
+              "displayName": "total_ignorados",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversaciones_unicas",
+              "displayName": "conversaciones_unicas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivos",
+              "displayName": "motivos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        544,
+        2064
+      ],
+      "id": "8bf02afc-f842-4aab-a080-922d8c3d48ed",
+      "name": "resumen_ignore"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1270051268,
+          "mode": "list",
+          "cachedResultName": "resumen_escalaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_escalaciones",
+              "displayName": "total_escalaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversaciones_unicas",
+              "displayName": "conversaciones_unicas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "por_agente",
+              "displayName": "por_agente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        560,
+        2272
+      ],
+      "id": "f6ba51c5-85e4-461b-9baa-0c6236d43cee",
+      "name": "resumen_escalaciones"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1850747103,
+          "mode": "list",
+          "cachedResultName": "eventos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        176,
+        2480
+      ],
+      "id": "2e58b291-02fe-4220-8390-85df2fbb696f",
+      "name": "Get row(s) in sheet7",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "/* ============================================================\n   n8n Code node — \"Jornadas por agente\" (bloques de conexión)\n   Entrada : filas del sheet `eventos`\n             (agent_id, name, from_status, to_status, changed_at)\n             changed_at ya viene en CDMX con offset -06:00.\n   Salida  : 1 item por (agente, día) con los BLOQUES de conexión\n             reconstruidos, horas conectadas y flags.\n   Notas   : DateTime es global en n8n (no usar require('luxon')).\n   ============================================================ */\n\nconst TZ            = 'America/Mexico_City';\nconst WINDOW_DAYS   = 30;                  // \"registro de días anteriores\"\nconst GAP_MERGE_MIN = 15;                  // <<< TUNEA AQUÍ:\n                                           //  5  -> ves descansos cortos\n                                           //  30 -> solo turnos (7-9 / 15-21)\nconst CONNECTED     = ['online', 'busy'];  // ambos = conectado\n\nconst now   = DateTime.now().setZone(TZ);\nconst desde = now.startOf('day').minus({ days: WINDOW_DAYS }).toISODate();\n\n// --- eventos agrupados por agente ---------------------------------\nconst evByAgent = {};\nfor (const it of $input.all()) {\n  const r = it.json;\n  const t = DateTime.fromISO(String(r.changed_at)).setZone(TZ);\n  if (!t.isValid) continue;\n  const aid = String(r.agent_id).trim();\n  (evByAgent[aid] ||= { name: String(r.name || '').trim(), evs: [] })\n    .evs.push({ t, to: r.to_status });\n}\n\nconst ensureDay = (dias, d) =>\n  (dias[d] ||= { bloques: [], horas_conectado: 0, cruza_medianoche: false });\n\nconst out = [];\nfor (const [aid, { name, evs }] of Object.entries(evByAgent)) {\n  evs.sort((a, b) => a.t.toMillis() - b.t.toMillis());\n\n  // 1) intervalos CRUDOS conectados (offline cierra; online<->busy no)\n  const raw = [];\n  let op = null;\n  for (const e of evs) {\n    if (CONNECTED.includes(e.to) && !op) op = e.t;\n    else if (e.to === 'offline' && op) { raw.push([op, e.t]); op = null; }\n  }\n  if (op) raw.push([op, null]);            // sigue conectado\n\n  // 2) bloques FUSIONADOS (solo para la línea de tiempo)\n  const merged = [];\n  for (const iv of raw) {\n    const last = merged[merged.length - 1];\n    if (last && iv[0] && last[1] &&\n        iv[0].diff(last[1], 'minutes').minutes <= GAP_MERGE_MIN) last[1] = iv[1];\n    else merged.push([iv[0], iv[1]]);\n  }\n\n  const dias = {};\n\n  // 3a) horas_conectado desde el CRUDO (independiente del gap) + corte por día\n  for (const [a, b] of raw) {\n    const bb = b || now;\n    let cur = a;\n    while (cur.toISODate() < bb.toISODate()) {\n      const nd = cur.plus({ days: 1 }).startOf('day');\n      const dd = ensureDay(dias, cur.toISODate());\n      dd.horas_conectado += nd.diff(cur, 'hours').hours;\n      dd.cruza_medianoche = true;\n      cur = nd;\n    }\n    ensureDay(dias, cur.toISODate()).horas_conectado += bb.diff(cur, 'hours').hours;\n  }\n\n  // 3b) bloques (merged) por día para el timeline\n  for (const [a, b] of merged) {\n    const curso = b === null;\n    const bb = b || now;\n    let cur = a;\n    while (cur.toISODate() < bb.toISODate()) {\n      const nd = cur.plus({ days: 1 }).startOf('day');\n      // termina en el límite del día -> \"24:00\" (no \"00:00\") y marca continuación\n      ensureDay(dias, cur.toISODate()).bloques.push(\n        { inicio: cur.toFormat('HH:mm'), fin: '24:00', en_curso: false, continua: true });\n      cur = nd;\n    }\n    ensureDay(dias, cur.toISODate()).bloques.push(\n      { inicio: cur.toFormat('HH:mm'), fin: curso ? null : bb.toFormat('HH:mm'), en_curso: curso });\n  }\n\n  // 4) emitir dentro de la ventana\n  for (const [d, v] of Object.entries(dias)) {\n    if (d < desde) continue;\n    out.push({ json: {\n      agent_id: aid, name, dia: d,\n      horas_conectado: Math.round(v.horas_conectado * 100) / 100,\n      n_bloques: v.bloques.length,\n      bloques: v.bloques,\n      en_curso: v.bloques.some(x => x.en_curso),\n      cruza_medianoche: v.cruza_medianoche,\n    }});\n  }\n}\n\n// día desc, luego nombre\nout.sort((a, b) =>\n  a.json.dia < b.json.dia ? 1 : a.json.dia > b.json.dia ? -1 :\n  a.json.name.localeCompare(b.json.name));\nreturn out;\n\n\n/* ============================================================\n   Chart.js — línea de tiempo de UN día (barras horizontales flotantes).\n   `filas` = items de este Code node filtrados a un `dia`.\n   ============================================================\nconst toMin = hhmm => { const [h,m]=hhmm.split(':').map(Number); return h*60+m; };\nconst filas = data.filter(r => r.dia === diaSeleccionado)\n                  .sort((a,b)=>a.name.localeCompare(b.name));\nconst labels = filas.map(r => r.name);\n\n// un dataset por \"slot\" de bloque (para dibujar varios bloques por agente)\nconst maxB = Math.max(1, ...filas.map(r => r.bloques.length));\nconst datasets = Array.from({length:maxB}, (_,i)=>({\n  label: `bloque ${i+1}`,\n  data: filas.map(r => {\n    const b = r.bloques[i];\n    if (!b) return null;\n    const ini = toMin(b.inicio);\n    let fin = b.en_curso ? toMin(new Date().toTimeString().slice(0,5)) : toMin(b.fin);\n    fin = Math.max(fin, ini + 1);       // nunca una barra invertida\n    return [ini, fin];                  // barra flotante [inicio, fin]\n  }),\n  borderWidth: 1,\n}));\n\nnew Chart(ctx, {\n  type: 'bar',\n  data: { labels, datasets },\n  options: {\n    indexAxis: 'y',\n    plugins: { title:{display:true,text:`Jornadas — ${diaSeleccionado}`}, legend:{display:false} },\n    scales: {\n      x: { min:0, max:1440, title:{display:true,text:'Hora (CDMX)'},\n           ticks:{ stepSize:60, callback:v=>String(v/60).padStart(2,'0')+':00' } },\n      y: { stacked:false }\n    }\n  }\n});\n============================================================ */"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        2480
+      ],
+      "id": "2801bfd0-d81f-4f45-9ffe-9a3f96423d20",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -128,
+        -304
+      ],
+      "id": "8f2353a0-5b76-4736-9f9e-99bbc252aee0",
+      "name": "Schedule Trigger1"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet5",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query5",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet6",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Clear sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Calcular horas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular horas": {
+      "main": [
+        [
+          {
+            "node": "resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "total_conversaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "TC_agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query2": {
+      "main": [
+        [
+          {
+            "node": "TC_respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query3": {
+      "main": [
+        [
+          {
+            "node": "pendientes_total",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query4": {
+      "main": [
+        [
+          {
+            "node": "resumen_diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet9": {
+      "main": [
+        [
+          {
+            "node": "orquestador_tokens",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "event_tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query5": {
+      "main": [
+        [
+          {
+            "node": "resumen_close",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TC_respuesta": {
+      "main": [
+        []
+      ]
+    },
+    "resumen": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "resumen_ignore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet5": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "resumen_escalaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet7": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "Kncobs51eBIdEGO8",
+  "active": false
+}

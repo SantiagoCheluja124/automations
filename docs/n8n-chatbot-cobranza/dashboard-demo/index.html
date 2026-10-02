@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operación · Chatwoot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper:#F1F2EE; --panel:#FFFFFF; --ink:#16181D; --muted:#6B7280;
+    --line:#E4E6E1; --line-strong:#D4D7D0;
+    --emerald:#1F8A5B; --emerald-bg:#E6F2EC;
+    --amber:#E0A21B; --amber-bg:#FBF1DC;
+    --clay:#C44536; --clay-bg:#F8E7E4;
+    --indigo:#4B4FB5; --indigo-bg:#E8E8F6;
+    --slate:#94A0A8;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 64px}
+
+  header.top{position:sticky;top:0;z-index:50;background:rgba(241,242,238,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .top-inner{max-width:1180px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .mark{display:flex;flex-direction:column;line-height:1.05}
+  .mark b{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.01em}
+  .mark span{font-size:11.5px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-weight:500}
+  .top-spacer{flex:1}
+  .freshness{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:7px 11px;border-radius:9px}
+  .freshness b{color:var(--ink);font-weight:700}
+  .loadbtn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--line-strong);padding:8px 14px;border-radius:10px;transition:border-color .15s}
+  .loadbtn:hover{border-color:var(--ink)}
+  .loadbtn:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+  .spinner{width:12px;height:12px;border:2px solid var(--line-strong);border-top-color:var(--ink);border-radius:50%;display:none;animation:spin .7s linear infinite}
+  .loadbtn.loading .spinner{display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spinner{animation:none}}
+
+  h2.sec{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:34px 2px 12px}
+
+  /* KPI cards */
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:22px}
+  @media(max-width:980px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:620px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 13px;display:flex;flex-direction:column;gap:3px}
+  .kpi .eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .kpi .val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;line-height:1.1}
+  .kpi .sub{font-size:11.5px;color:var(--muted)}
+  .kpi.emerald .val{color:var(--emerald)}
+  .kpi.amber .val{color:var(--amber)}
+  .kpi.clay .val{color:var(--clay)}
+  .kpi.indigo .val{color:var(--indigo)}
+
+  /* reconciliation strip — signature */
+  .recon{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-top:12px}
+  .recon .rowtop{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+  .recon .title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px}
+  .recon .eq{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted)}
+  .recon .eq b{color:var(--ink)}
+  .bar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin-top:11px;border:1px solid var(--line)}
+  .bar > div{transition:width .35s ease}
+  .seg-bot{background:var(--emerald)}
+  .seg-hum{background:var(--indigo)}
+  .seg-sin{background:var(--slate)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:9px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
+  .legend b{color:var(--ink);font-family:'JetBrains Mono',monospace;font-weight:700}
+
+  /* panels & charts */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+  .panel h3{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;margin:0 0 4px}
+  .panel .note{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+  .chartbox{position:relative;height:230px}
+
+  /* agent cards */
+  .agents{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  @media(max-width:980px){.agents{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:620px){.agents{grid-template-columns:repeat(2,1fr)}}
+  .agent{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--slate);border-radius:var(--r);padding:13px 15px;display:flex;flex-direction:column;gap:4px}
+  .agent.on{border-left-color:var(--emerald)}
+  .agent b{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14.5px}
+  .agent .st{font-size:12px;color:var(--muted)}
+  .agent.on .st{color:var(--emerald);font-weight:500}
+  .agent .meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+  .agentsum{font-size:12.5px;color:var(--muted);margin:10px 2px 0}
+  .agentsum b{color:var(--ink)}
+
+  /* agents table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-strong);font-weight:500}
+  td{padding:8px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  .dot.on{background:var(--emerald)} .dot.off{background:var(--slate)}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+  .empty{color:var(--muted);font-size:12.5px;padding:14px 4px}
+</style>
+</head>
+<body><div style="background:#16181D;color:#F1F2EE;font:500 12px/1.4 Inter,system-ui,sans-serif;padding:8px 16px;text-align:center">Demo con datos ficticios · en producción este dashboard lo sirve un webhook de n8n con datos reales de Chatwoot y Google Sheets</div>
+<header class="top">
+  <div class="top-inner">
+    <div class="mark"><b>FinDemo · CS Operación</b><span>Chatwoot / n8n · métricas auditables</span></div>
+    <div class="top-spacer"></div>
+    <div class="freshness">datos: <b id="fresh">—</b></div>
+    <button class="loadbtn" id="btnRefresh" type="button"><span class="spinner"></span>Actualizar datos</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="sec" style="margin-top:22px">Estado del equipo · ahora</h2>
+  <div class="agents" id="agentCards"></div>
+  <div class="agentsum" id="agentSum"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="recon" id="recon">
+    <div class="rowtop">
+      <div class="title">Cuadre del día <span class="mono" id="reconFecha"></span></div>
+      <div class="eq" id="reconEq">entradas = bot + humano + sin asignar</div>
+    </div>
+    <div class="bar" id="reconBar"></div>
+    <div class="legend" id="reconLegend"></div>
+  </div>
+
+  <h2 class="sec">Tendencias · últimos 14 días</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Entradas y cobertura del bot</h3>
+      <div class="note">Conversaciones nuevas por día · % resuelto por el bot (agente 26)</div>
+      <div class="chartbox"><canvas id="chTrend"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Cierres por tipo</h3>
+      <div class="note">Quién cerró: bot · humano · sistema (reporting_events)</div>
+      <div class="chartbox"><canvas id="chCierres"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Costo del modelo (USD)</h3>
+      <div class="note">Gasto diario total · costo por conversación</div>
+      <div class="chartbox"><canvas id="chCosto"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Escalaciones e ignorados</h3>
+      <div class="note">Decisiones reales del bot: ESCALATE_HUMAN · IGNORE</div>
+      <div class="chartbox"><canvas id="chEscIgn"></canvas></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Carga por agente humano · últimos 14 días</h2>
+  <div class="panel">
+    <div class="note">Conversaciones asignadas por agente humano (TC_agente) · excluye bot y sin asignar</div>
+    <div class="chartbox"><canvas id="chAgentes"></canvas></div>
+  </div>
+
+  <h2 class="sec">Equipo · detalle</h2>
+  <div class="panel">
+    <table id="tblAgentes">
+      <thead><tr><th>Agente</th><th>Estado</th><th>Horas ayer</th><th>Última actualización</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="agEmpty" style="display:none">Sin datos de agentes.</div>
+  </div>
+</div>
+
+<script>
+let DATA = {"generated_at": "2026-10-02T00:25:13.563278+00:00", "daily": [{"fecha": "2026-09-11", "entradas": 301, "resueltas_bot": 232, "terminadas_con_humano": 60, "sin_asignar": 9, "cobertura_bot": 0.7708}, {"fecha": "2026-09-12", "entradas": 135, "resueltas_bot": 104, "terminadas_con_humano": 19, "sin_asignar": 12, "cobertura_bot": 0.7704}, {"fecha": "2026-09-13", "entradas": 144, "resueltas_bot": 97, "terminadas_con_humano": 36, "sin_asignar": 11, "cobertura_bot": 0.6736}, {"fecha": "2026-09-14", "entradas": 270, "resueltas_bot": 192, "terminadas_con_humano": 67, "sin_asignar": 11, "cobertura_bot": 0.7111}, {"fecha": "2026-09-15", "entradas": 357, "resueltas_bot": 253, "terminadas_con_humano": 96, "sin_asignar": 8, "cobertura_bot": 0.7087}, {"fecha": "2026-09-16", "entradas": 347, "resueltas_bot": 260, "terminadas_con_humano": 80, "sin_asignar": 7, "cobertura_bot": 0.7493}, {"fecha": "2026-09-17", "entradas": 371, "resueltas_bot": 259, "terminadas_con_humano": 107, "sin_asignar": 5, "cobertura_bot": 0.6981}, {"fecha": "2026-09-18", "entradas": 344, "resueltas_bot": 226, "terminadas_con_humano": 108, "sin_asignar": 10, "cobertura_bot": 0.657}, {"fecha": "2026-09-19", "entradas": 126, "resueltas_bot": 87, "terminadas_con_humano": 28, "sin_asignar": 11, "cobertura_bot": 0.6905}, {"fecha": "2026-09-20", "entradas": 139, "resueltas_bot": 98, "terminadas_con_humano": 33, "sin_asignar": 8, "cobertura_bot": 0.705}, {"fecha": "2026-09-21", "entradas": 299, "resueltas_bot": 189, "terminadas_con_humano": 106, "sin_asignar": 4, "cobertura_bot": 0.6321}, {"fecha": "2026-09-22", "entradas": 342, "resueltas_bot": 259, "terminadas_con_humano": 76, "sin_asignar": 7, "cobertura_bot": 0.7573}, {"fecha": "2026-09-23", "entradas": 354, "resueltas_bot": 264, "terminadas_con_humano": 84, "sin_asignar": 6, "cobertura_bot": 0.7458}, {"fecha": "2026-09-24", "entradas": 306, "resueltas_bot": 193, "terminadas_con_humano": 109, "sin_asignar": 4, "cobertura_bot": 0.6307}, {"fecha": "2026-09-25", "entradas": 351, "resueltas_bot": 259, "terminadas_con_humano": 82, "sin_asignar": 10, "cobertura_bot": 0.7379}, {"fecha": "2026-09-26", "entradas": 179, "resueltas_bot": 134, "terminadas_con_humano": 40, "sin_asignar": 5, "cobertura_bot": 0.7486}, {"fecha": "2026-09-27", "entradas": 144, "resueltas_bot": 108, "terminadas_con_humano": 30, "sin_asignar": 6, "cobertura_bot": 0.75}, {"fecha": "2026-09-28", "entradas": 364, "resueltas_bot": 278, "terminadas_con_humano": 77, "sin_asignar": 9, "cobertura_bot": 0.7637}, {"fecha": "2026-09-29", "entradas": 267, "resueltas_bot": 179, "terminadas_con_humano": 77, "sin_asignar": 11, "cobertura_bot": 0.6704}, {"fecha": "2026-09-30", "entradas": 268, "resueltas_bot": 185, "terminadas_con_humano": 71, "sin_asignar": 12, "cobertura_bot": 0.6903}, {"fecha": "2026-10-01", "entradas": 380, "resueltas_bot": 247, "terminadas_con_humano": 123, "sin_asignar": 10, "cobertura_bot": 0.65}], "cierres": [{"fecha": "2026-09-11", "cerradas_bot": 232, "cerradas_humano": 60, "cerradas_sistema": 15, "total_cierres": 301}, {"fecha": "2026-09-12", "cerradas_bot": 104, "cerradas_humano": 15, "cerradas_sistema": 11, "total_cierres": 135}, {"fecha": "2026-09-13", "cerradas_bot": 96, "cerradas_humano": 32, "cerradas_sistema": 2, "total_cierres": 144}, {"fecha": "2026-09-14", "cerradas_bot": 185, "cerradas_humano": 65, "cerradas_sistema": 13, "total_cierres": 270}, {"fecha": "2026-09-15", "cerradas_bot": 248, "cerradas_humano": 91, "cerradas_sistema": 7, "total_cierres": 357}, {"fecha": "2026-09-16", "cerradas_bot": 254, "cerradas_humano": 75, "cerradas_sistema": 7, "total_cierres": 347}, {"fecha": "2026-09-17", "cerradas_bot": 252, "cerradas_humano": 104, "cerradas_sistema": 10, "total_cierres": 371}, {"fecha": "2026-09-18", "cerradas_bot": 224, "cerradas_humano": 106, "cerradas_sistema": 6, "total_cierres": 344}, {"fecha": "2026-09-19", "cerradas_bot": 81, "cerradas_humano": 25, "cerradas_sistema": 8, "total_cierres": 126}, {"fecha": "2026-09-20", "cerradas_bot": 98, "cerradas_humano": 33, "cerradas_sistema": 15, "total_cierres": 139}, {"fecha": "2026-09-21", "cerradas_bot": 184, "cerradas_humano": 101, "cerradas_sistema": 6, "total_cierres": 299}, {"fecha": "2026-09-22", "cerradas_bot": 251, "cerradas_humano": 74, "cerradas_sistema": 4, "total_cierres": 342}, {"fecha": "2026-09-23", "cerradas_bot": 256, "cerradas_humano": 81, "cerradas_sistema": 7, "total_cierres": 354}, {"fecha": "2026-09-24", "cerradas_bot": 190, "cerradas_humano": 106, "cerradas_sistema": 5, "total_cierres": 306}, {"fecha": "2026-09-25", "cerradas_bot": 257, "cerradas_humano": 79, "cerradas_sistema": 14, "total_cierres": 351}, {"fecha": "2026-09-26", "cerradas_bot": 127, "cerradas_humano": 35, "cerradas_sistema": 7, "total_cierres": 179}, {"fecha": "2026-09-27", "cerradas_bot": 108, "cerradas_humano": 28, "cerradas_sistema": 5, "total_cierres": 144}, {"fecha": "2026-09-28", "cerradas_bot": 270, "cerradas_humano": 76, "cerradas_sistema": 10, "total_cierres": 364}, {"fecha": "2026-09-29", "cerradas_bot": 171, "cerradas_humano": 73, "cerradas_sistema": 9, "total_cierres": 267}, {"fecha": "2026-09-30", "cerradas_bot": 177, "cerradas_humano": 67, "cerradas_sistema": 10, "total_cierres": 268}, {"fecha": "2026-10-01", "cerradas_bot": 245, "cerradas_humano": 120, "cerradas_sistema": 3, "total_cierres": 380}], "tokens": [{"fecha": "2026-09-11", "costo_total_usd": 1.38, "costo_por_conversacion_usd": 0.0046}, {"fecha": "2026-09-12", "costo_total_usd": 0.58, "costo_por_conversacion_usd": 0.0043}, {"fecha": "2026-09-13", "costo_total_usd": 0.68, "costo_por_conversacion_usd": 0.0047}, {"fecha": "2026-09-14", "costo_total_usd": 1.19, "costo_por_conversacion_usd": 0.0044}, {"fecha": "2026-09-15", "costo_total_usd": 1.67, "costo_por_conversacion_usd": 0.0047}, {"fecha": "2026-09-16", "costo_total_usd": 1.23, "costo_por_conversacion_usd": 0.0035}, {"fecha": "2026-09-17", "costo_total_usd": 1.5, "costo_por_conversacion_usd": 0.004}, {"fecha": "2026-09-18", "costo_total_usd": 1.21, "costo_por_conversacion_usd": 0.0035}, {"fecha": "2026-09-19", "costo_total_usd": 0.54, "costo_por_conversacion_usd": 0.0043}, {"fecha": "2026-09-20", "costo_total_usd": 0.54, "costo_por_conversacion_usd": 0.0039}, {"fecha": "2026-09-21", "costo_total_usd": 1.33, "costo_por_conversacion_usd": 0.0044}, {"fecha": "2026-09-22", "costo_total_usd": 1.44, "costo_por_conversacion_usd": 0.0042}, {"fecha": "2026-09-23", "costo_total_usd": 1.76, "costo_por_conversacion_usd": 0.005}, {"fecha": "2026-09-24", "costo_total_usd": 1.28, "costo_por_conversacion_usd": 0.0042}, {"fecha": "2026-09-25", "costo_total_usd": 1.67, "costo_por_conversacion_usd": 0.0048}, {"fecha": "2026-09-26", "costo_total_usd": 0.68, "costo_por_conversacion_usd": 0.0038}, {"fecha": "2026-09-27", "costo_total_usd": 0.59, "costo_por_conversacion_usd": 0.0041}, {"fecha": "2026-09-28", "costo_total_usd": 1.38, "costo_por_conversacion_usd": 0.0038}, {"fecha": "2026-09-29", "costo_total_usd": 1.35, "costo_por_conversacion_usd": 0.0051}, {"fecha": "2026-09-30", "costo_total_usd": 1.04, "costo_por_conversacion_usd": 0.0039}, {"fecha": "2026-10-01", "costo_total_usd": 1.63, "costo_por_conversacion_usd": 0.0043}], "ignorados": [{"fecha": "2026-09-11", "total_ignorados": 19, "conversaciones_unicas": 15}, {"fecha": "2026-09-12", "total_ignorados": 15, "conversaciones_unicas": 15}, {"fecha": "2026-09-13", "total_ignorados": 23, "conversaciones_unicas": 18}, {"fecha": "2026-09-14", "total_ignorados": 27, "conversaciones_unicas": 27}, {"fecha": "2026-09-15", "total_ignorados": 26, "conversaciones_unicas": 23}, {"fecha": "2026-09-16", "total_ignorados": 22, "conversaciones_unicas": 20}, {"fecha": "2026-09-17", "total_ignorados": 12, "conversaciones_unicas": 9}, {"fecha": "2026-09-18", "total_ignorados": 21, "conversaciones_unicas": 17}, {"fecha": "2026-09-19", "total_ignorados": 23, "conversaciones_unicas": 18}, {"fecha": "2026-09-20", "total_ignorados": 20, "conversaciones_unicas": 19}, {"fecha": "2026-09-21", "total_ignorados": 30, "conversaciones_unicas": 29}, {"fecha": "2026-09-22", "total_ignorados": 15, "conversaciones_unicas": 11}, {"fecha": "2026-09-23", "total_ignorados": 8, "conversaciones_unicas": 6}, {"fecha": "2026-09-24", "total_ignorados": 23, "conversaciones_unicas": 19}, {"fecha": "2026-09-25", "total_ignorados": 10, "conversaciones_unicas": 5}, {"fecha": "2026-09-26", "total_ignorados": 25, "conversaciones_unicas": 24}, {"fecha": "2026-09-27", "total_ignorados": 15, "conversaciones_unicas": 11}, {"fecha": "2026-09-28", "total_ignorados": 24, "conversaciones_unicas": 24}, {"fecha": "2026-09-29", "total_ignorados": 11, "conversaciones_unicas": 7}, {"fecha": "2026-09-30", "total_ignorados": 16, "conversaciones_unicas": 13}, {"fecha": "2026-10-01", "total_ignorados": 18, "conversaciones_unicas": 18}], "escalaciones": [{"fecha": "2026-09-11", "total_escalaciones": 62, "conversaciones_unicas": 54}, {"fecha": "2026-09-12", "total_escalaciones": 14, "conversaciones_unicas": 10}, {"fecha": "2026-09-13", "total_escalaciones": 23, "conversaciones_unicas": 18}, {"fecha": "2026-09-14", "total_escalaciones": 67, "conversaciones_unicas": 59}, {"fecha": "2026-09-15", "total_escalaciones": 90, "conversaciones_unicas": 89}, {"fecha": "2026-09-16", "total_escalaciones": 79, "conversaciones_unicas": 70}, {"fecha": "2026-09-17", "total_escalaciones": 100, "conversaciones_unicas": 94}, {"fecha": "2026-09-18", "total_escalaciones": 101, "conversaciones_unicas": 92}, {"fecha": "2026-09-19", "total_escalaciones": 11, "conversaciones_unicas": 11}, {"fecha": "2026-09-20", "total_escalaciones": 25, "conversaciones_unicas": 20}, {"fecha": "2026-09-21", "total_escalaciones": 104, "conversaciones_unicas": 101}, {"fecha": "2026-09-22", "total_escalaciones": 71, "conversaciones_unicas": 61}, {"fecha": "2026-09-23", "total_escalaciones": 68, "conversaciones_unicas": 64}, {"fecha": "2026-09-24", "total_escalaciones": 111, "conversaciones_unicas": 104}, {"fecha": "2026-09-25", "total_escalaciones": 72, "conversaciones_unicas": 65}, {"fecha": "2026-09-26", "total_escalaciones": 35, "conversaciones_unicas": 35}, {"fecha": "2026-09-27", "total_escalaciones": 19, "conversaciones_unicas": 15}, {"fecha": "2026-09-28", "total_escalaciones": 60, "conversaciones_unicas": 58}, {"fecha": "2026-09-29", "total_escalaciones": 74, "conversaciones_unicas": 71}, {"fecha": "2026-09-30", "total_escalaciones": 59, "conversaciones_unicas": 51}, {"fecha": "2026-10-01", "total_escalaciones": 117, "conversaciones_unicas": 111}], "agentes": [{"agent_id": 1, "name": "Agente 1", "status": "online", "update_at": "2026-10-01T21:34:13.563278+00:00"}, {"agent_id": 2, "name": "Agente 2", "status": "offline", "update_at": "2026-10-01T22:50:13.563278+00:00"}, {"agent_id": 3, "name": "Agente 3", "status": "online", "update_at": "2026-10-01T23:47:13.563278+00:00"}, {"agent_id": 4, "name": "Agente 4", "status": "online", "update_at": "2026-10-01T23:19:13.563278+00:00"}, {"agent_id": 5, "name": "Agente 5", "status": "offline", "update_at": "2026-10-01T20:37:13.563278+00:00"}, {"agent_id": 6, "name": "Agente 6", "status": "online", "update_at": "2026-10-01T23:48:13.563278+00:00"}], "agentes_dia": [{"fecha": "2026-09-11", "Agente 1": 8, "Agente 2": 3, "Agente 3": 15, "Agente 4": 9, "Agente 5": 21, "Agente 6": 2, "agente n8n": 232, "sin asignar": 9, "Total general": 301}, {"fecha": "2026-09-12", "Agente 1": 2, "Agente 2": 3, "Agente 3": 3, "Agente 4": 3, "Agente 5": 4, "Agente 6": 0, "agente n8n": 104, "sin asignar": 12, "Total general": 135}, {"fecha": "2026-09-13", "Agente 1": 5, "Agente 2": 11, "Agente 3": 4, "Agente 4": 3, "Agente 5": 2, "Agente 6": 9, "agente n8n": 97, "sin asignar": 11, "Total general": 144}, {"fecha": "2026-09-14", "Agente 1": 11, "Agente 2": 20, "Agente 3": 4, "Agente 4": 12, "Agente 5": 1, "Agente 6": 17, "agente n8n": 192, "sin asignar": 11, "Total general": 270}, {"fecha": "2026-09-15", "Agente 1": 25, "Agente 2": 13, "Agente 3": 18, "Agente 4": 1, "Agente 5": 19, "Agente 6": 17, "agente n8n": 253, "sin asignar": 8, "Total general": 357}, {"fecha": "2026-09-16", "Agente 1": 5, "Agente 2": 2, "Agente 3": 35, "Agente 4": 6, "Agente 5": 11, "Agente 6": 18, "agente n8n": 260, "sin asignar": 7, "Total general": 347}, {"fecha": "2026-09-17", "Agente 1": 41, "Agente 2": 29, "Agente 3": 16, "Agente 4": 9, "Agente 5": 3, "Agente 6": 6, "agente n8n": 259, "sin asignar": 5, "Total general": 371}, {"fecha": "2026-09-18", "Agente 1": 15, "Agente 2": 25, "Agente 3": 18, "Agente 4": 13, "Agente 5": 16, "Agente 6": 18, "agente n8n": 226, "sin asignar": 10, "Total general": 344}, {"fecha": "2026-09-19", "Agente 1": 2, "Agente 2": 11, "Agente 3": 5, "Agente 4": 1, "Agente 5": 6, "Agente 6": 1, "agente n8n": 87, "sin asignar": 11, "Total general": 126}, {"fecha": "2026-09-20", "Agente 1": 6, "Agente 2": 4, "Agente 3": 1, "Agente 4": 5, "Agente 5": 10, "Agente 6": 5, "agente n8n": 98, "sin asignar": 8, "Total general": 139}, {"fecha": "2026-09-21", "Agente 1": 37, "Agente 2": 20, "Agente 3": 5, "Agente 4": 21, "Agente 5": 1, "Agente 6": 20, "agente n8n": 189, "sin asignar": 4, "Total general": 299}, {"fecha": "2026-09-22", "Agente 1": 3, "Agente 2": 13, "Agente 3": 16, "Agente 4": 14, "Agente 5": 13, "Agente 6": 13, "agente n8n": 259, "sin asignar": 7, "Total general": 342}, {"fecha": "2026-09-23", "Agente 1": 5, "Agente 2": 16, "Agente 3": 9, "Agente 4": 22, "Agente 5": 20, "Agente 6": 9, "agente n8n": 264, "sin asignar": 6, "Total general": 354}, {"fecha": "2026-09-24", "Agente 1": 30, "Agente 2": 11, "Agente 3": 21, "Agente 4": 28, "Agente 5": 4, "Agente 6": 13, "agente n8n": 193, "sin asignar": 4, "Total general": 306}, {"fecha": "2026-09-25", "Agente 1": 13, "Agente 2": 30, "Agente 3": 23, "Agente 4": 5, "Agente 5": 4, "Agente 6": 4, "agente n8n": 259, "sin asignar": 10, "Total general": 351}, {"fecha": "2026-09-26", "Agente 1": 9, "Agente 2": 8, "Agente 3": 1, "Agente 4": 8, "Agente 5": 1, "Agente 6": 11, "agente n8n": 134, "sin asignar": 5, "Total general": 179}, {"fecha": "2026-09-27", "Agente 1": 4, "Agente 2": 6, "Agente 3": 0, "Agente 4": 5, "Agente 5": 7, "Agente 6": 5, "agente n8n": 108, "sin asignar": 6, "Total general": 144}, {"fecha": "2026-09-28", "Agente 1": 19, "Agente 2": 24, "Agente 3": 4, "Agente 4": 4, "Agente 5": 19, "Agente 6": 3, "agente n8n": 278, "sin asignar": 9, "Total general": 364}, {"fecha": "2026-09-29", "Agente 1": 8, "Agente 2": 1, "Agente 3": 4, "Agente 4": 20, "Agente 5": 1, "Agente 6": 40, "agente n8n": 179, "sin asignar": 11, "Total general": 267}, {"fecha": "2026-09-30", "Agente 1": 15, "Agente 2": 11, "Agente 3": 14, "Agente 4": 15, "Agente 5": 4, "Agente 6": 9, "agente n8n": 185, "sin asignar": 12, "Total general": 268}, {"fecha": "2026-10-01", "Agente 1": 2, "Agente 2": 24, "Agente 3": 29, "Agente 4": 33, "Agente 5": 5, "Agente 6": 26, "agente n8n": 247, "sin asignar": 10, "Total general": 380}], "conexion": [{"fecha": "2026-10-01", "agent_id": 1, "horas_conectado": 8.89}, {"fecha": "2026-10-01", "agent_id": 2, "horas_conectado": 6.27}, {"fecha": "2026-10-01", "agent_id": 3, "horas_conectado": 8.83}, {"fecha": "2026-10-01", "agent_id": 4, "horas_conectado": 6.89}, {"fecha": "2026-10-01", "agent_id": 5, "horas_conectado": 7.21}, {"fecha": "2026-10-01", "agent_id": 6, "horas_conectado": 8.96}]};
+const $=s=>document.querySelector(s);
+const fmt=(n,d=0)=>n==null||isNaN(n)?'—':Number(n).toLocaleString('es-MX',{maximumFractionDigits:d,minimumFractionDigits:d});
+const pct=n=>n==null||isNaN(n)?'—':(n*100).toFixed(1)+'%';
+const day=f=>String(f||'').slice(0,10);
+const short=f=>day(f).slice(5);
+let charts=[];
+
+function latest(arr){return arr&&arr.length?arr[arr.length-1]:null}
+function byFecha(arr,f){return (arr||[]).find(r=>day(r.fecha)===f)||null}
+function lastN(arr,n){return (arr||[]).slice(-n)}
+
+function render(){
+  charts.forEach(c=>c.destroy());charts=[];
+  const d=DATA||{};
+  $('#fresh').textContent=d.generated_at?new Date(d.generated_at).toLocaleString('es-MX',{timeZone:'America/Mexico_City'}):'—';
+
+  const daily=(d.daily||[]).slice().sort((a,b)=>day(a.fecha)<day(b.fecha)?-1:1);
+  const L=latest(daily);
+  const f=L?day(L.fecha):null;
+  const esc=f?byFecha(d.escalaciones,f):null;
+  const ign=f?byFecha(d.ignorados,f):null;
+  const tok=f?byFecha(d.tokens,f):latest(d.tokens);
+  const cie=f?byFecha(d.cierres,f):latest(d.cierres);
+  const online=(d.agentes||[]).filter(a=>String(a.status).toLowerCase()==='online');
+
+  // ---- agent cards (online primero)
+  const conn={};(d.conexion||[]).forEach(r=>{conn[String(r.agent_id).split('.')[0]]=r.horas_conectado});
+  const sorted=(d.agentes||[]).slice().sort((a,b)=>{
+    const ao=String(a.status).toLowerCase()==='online'?0:1, bo=String(b.status).toLowerCase()==='online'?0:1;
+    return ao-bo || String(a.name||'').localeCompare(String(b.name||''));
+  });
+  $('#agentCards').innerHTML=sorted.map(a=>{
+    const on=String(a.status).toLowerCase()==='online';
+    const id=String(a.agent_id).split('.')[0];
+    const h=conn[id]!=null?fmt(conn[id],1)+' h ayer':'';
+    const t=a.update_at?new Date(a.update_at).toLocaleTimeString('es-MX',{timeZone:'America/Mexico_City',hour:'2-digit',minute:'2-digit'}):'—';
+    return `<div class="agent ${on?'on':''}"><b>${a.name||id}</b><span class="st">${on?'● En línea':'○ Desconectado'}</span><span class="meta">act. ${t}${h?' · '+h:''}</span></div>`;
+  }).join('');
+  $('#agentSum').innerHTML=sorted.length?`<b>${online.length}</b> de <b>${sorted.length}</b> agentes en línea en este momento`:'';
+
+  const cob=L?(L.cobertura_bot!=null&&L.cobertura_bot!==''?Number(L.cobertura_bot):(L.entradas?Number(L.resueltas_bot)/Number(L.entradas):null)):null;
+  const tasaEsc=(esc&&L&&Number(L.entradas))?Number(esc.conversaciones_unicas)/Number(L.entradas):null;
+
+  const K=[
+    {cls:'emerald',eye:'Cobertura bot · Card 1',val:pct(cob),sub:L?`${fmt(L.resueltas_bot)} de ${fmt(L.entradas)} entradas`:'sin datos'},
+    {cls:'indigo',eye:'Escalamiento real · Card 4',val:pct(tasaEsc),sub:esc?`${fmt(esc.conversaciones_unicas)} conv. escaladas`:'sin registro'},
+    {cls:'amber',eye:'Costo / conversación · Card 8',val:tok?('$'+fmt(tok.costo_por_conversacion_usd,4)):'—',sub:tok?`total día $${fmt(tok.costo_total_usd,2)}`:'sin datos'},
+    {cls:'',eye:'Entradas',val:L?fmt(L.entradas):'—',sub:f||''},
+    {cls:'clay',eye:'Ignorados · Card 12',val:ign?fmt(ign.total_ignorados):'—',sub:ign?`${fmt(ign.conversaciones_unicas)} conv. únicas`:'sin registro'},
+    {cls:'emerald',eye:'Agentes en línea',val:fmt(online.length),sub:online.map(a=>a.name).slice(0,3).join(', ')||'nadie conectado'}
+  ];
+  $('#kpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><span class="eyebrow">${k.eye}</span><span class="val">${k.val}</span><span class="sub">${k.sub}</span></div>`).join('');
+
+  // reconciliation strip
+  if(L){
+    const e=Number(L.entradas)||0,b=Number(L.resueltas_bot)||0,h=Number(L.terminadas_con_humano||L.escaladas_humano)||0,s=Number(L.sin_asignar)||0;
+    $('#reconFecha').textContent=f;
+    const ok=(b+h+s)===e;
+    $('#reconEq').innerHTML=`<b>${fmt(e)}</b> = ${fmt(b)} bot + ${fmt(h)} humano + ${fmt(s)} sin asignar ${ok?'· ✓ cuadra':'· ≠ revisar'}`;
+    $('#reconBar').innerHTML=e?`<div class="seg-bot" style="width:${b/e*100}%"></div><div class="seg-hum" style="width:${h/e*100}%"></div><div class="seg-sin" style="width:${s/e*100}%"></div>`:'';
+    $('#reconLegend').innerHTML=
+      `<span><i style="background:var(--emerald)"></i>Resueltas bot <b>${fmt(b)}</b></span>`+
+      `<span><i style="background:var(--indigo)"></i>Terminadas con humano <b>${fmt(h)}</b></span>`+
+      `<span><i style="background:var(--slate)"></i>Sin asignar <b>${fmt(s)}</b></span>`;
+  }
+
+  const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:css('--line')},ticks:{font:{size:10}}}}};
+
+  const D14=lastN(daily,14),lab=D14.map(r=>short(r.fecha));
+  charts.push(new Chart($('#chTrend'),{data:{labels:lab,datasets:[
+    {type:'bar',label:'Entradas',data:D14.map(r=>+r.entradas||0),backgroundColor:css('--indigo-bg'),borderColor:css('--indigo'),borderWidth:1,yAxisID:'y'},
+    {type:'line',label:'Cobertura %',data:D14.map(r=>{const c=r.cobertura_bot!==''&&r.cobertura_bot!=null?+r.cobertura_bot:(+r.entradas?(+r.resueltas_bot)/(+r.entradas):null);return c==null?null:+(c*100).toFixed(1)}),borderColor:css('--emerald'),backgroundColor:css('--emerald'),tension:.3,yAxisID:'y1',pointRadius:3}
+  ]},options:{...base,scales:{...base.scales,y1:{position:'right',grid:{display:false},ticks:{callback:v=>v+'%',font:{size:10}}}}}}));
+
+  const C14=lastN((d.cierres||[]).slice().sort((a,b)=>day(a.fecha)<day(b.fecha)?-1:1),14),labC=C14.map(r=>short(r.fecha));
+  charts.push(new Chart($('#chCierres'),{type:'bar',data:{labels:labC,datasets:[
+    {label:'Bot',data:C14.map(r=>+r.cerradas_bot||0),backgroundColor:css('--emerald')},
+    {label:'Humano',data:C14.map(r=>+r.cerradas_humano||0),backgroundColor:css('--indigo')},
+    {label:'Sistema',data:C14.map(r=>+r.cerradas_sistema||0),backgroundColor:css('--slate')}
+  ]},options:{...base,scales:{x:{...base.scales.x,stacked:true},y:{...base.scales.y,stacked:true}}}}));
+
+  const T14=lastN((d.tokens||[]).slice().sort((a,b)=>day(a.fecha)<day(b.fecha)?-1:1),14),labT=T14.map(r=>short(r.fecha));
+  charts.push(new Chart($('#chCosto'),{data:{labels:labT,datasets:[
+    {type:'bar',label:'Total USD',data:T14.map(r=>+r.costo_total_usd||0),backgroundColor:css('--amber-bg'),borderColor:css('--amber'),borderWidth:1,yAxisID:'y'},
+    {type:'line',label:'USD / conversación',data:T14.map(r=>+r.costo_por_conversacion_usd||null),borderColor:css('--clay'),backgroundColor:css('--clay'),tension:.3,yAxisID:'y1',pointRadius:3}
+  ]},options:{...base,scales:{...base.scales,y1:{position:'right',grid:{display:false},ticks:{font:{size:10}}}}}}));
+
+  const E14=lastN((d.escalaciones||[]).slice().sort((a,b)=>day(a.fecha)<day(b.fecha)?-1:1),14);
+  const I=(d.ignorados||[]);
+  const labE=E14.map(r=>short(r.fecha));
+  charts.push(new Chart($('#chEscIgn'),{type:'bar',data:{labels:labE,datasets:[
+    {label:'Escaladas (únicas)',data:E14.map(r=>+r.conversaciones_unicas||0),backgroundColor:css('--indigo')},
+    {label:'Ignoradas',data:E14.map(r=>{const m=byFecha(I,day(r.fecha));return m?+m.total_ignorados||0:0}),backgroundColor:css('--clay')}
+  ]},options:base}));
+
+  // ---- carga por agente humano (TC_agente) · detecta columnas solo
+  const PAL=['#1F8A5B','#4B4FB5','#E0A21B','#C44536','#94A0A8','#7A9E7E','#B5793F','#5FA8A0'];
+  const A14=lastN((d.agentes_dia||[]).slice().sort((a,b)=>day(a.fecha)<day(b.fecha)?-1:1),14);
+  const labA=A14.map(r=>short(r.fecha));
+  const kn=k=>String(k).toLowerCase().replace(/\\s+/g,' ').trim();
+  const NOAG=new Set(['fecha','total general','agente n8n','sin asignar']);
+  const agentCols=A14.length?Object.keys(A14[0]).filter(k=>!NOAG.has(kn(k))):[];
+  charts.push(new Chart($('#chAgentes'),{type:'bar',data:{labels:labA,datasets:agentCols.map((c,i)=>({
+    label:c,data:A14.map(r=>+r[c]||0),backgroundColor:PAL[i%PAL.length]
+  }))},options:{...base,scales:{x:{...base.scales.x,stacked:true},y:{...base.scales.y,stacked:true}}}}));
+
+  // agents table
+  const tb=$('#tblAgentes tbody');
+  const conexion=d.conexion||[];
+  const lastConn={};
+  conexion.forEach(r=>{lastConn[String(r.agent_id).split('.')[0]]={h:r.horas_conectado,f:day(r.fecha)}});
+  const ags=(d.agentes||[]);
+  if(!ags.length){$('#agEmpty').style.display='block'}
+  tb.innerHTML=ags.map(a=>{
+    const id=String(a.agent_id).split('.')[0];
+    const on=String(a.status).toLowerCase()==='online';
+    const c=lastConn[id];
+    return `<tr><td><span class="dot ${on?'on':'off'}"></span>${a.name||id}</td><td>${on?'En línea':'Desconectado'}</td><td class="mono">${c?fmt(c.h,2)+' h':'—'}</td><td class="mono">${a.update_at?new Date(a.update_at).toLocaleTimeString('es-MX',{timeZone:'America/Mexico_City',hour:'2-digit',minute:'2-digit'}):'—'}</td></tr>`;
+  }).join('');
+}
+
+async function refresh(){
+  const btn=$('#btnRefresh');btn.classList.add('loading');
+  try{
+    const u=new URL(location.href);u.searchParams.set('format','json');
+    const r=await fetch(u.toString(),{cache:'no-store'});
+    DATA=await r.json();render();
+  }catch(e){console.error('refresh failed',e)}
+  btn.classList.remove('loading');
+}
+document.getElementById('btnRefresh').addEventListener('click',refresh);
+
+render();
+</script>
+</body>
+</html>

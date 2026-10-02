@@ -1,0 +1,1208 @@
+{
+  "name": "first_flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-incoming",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -4752,
+        864
+      ],
+      "id": "1c8f2ac1-076d-472e-ba37-67ada3917499",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.body.conversation.id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2624,
+        848
+      ],
+      "id": "ff9743c4-bcd1-4c95-84ec-052a65d4e18f",
+      "name": "get_historial_chatwoot",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "64fb6b94-1bb9-4a3d-bdd1-206d7cb4cf70",
+              "name": "message",
+              "value": "={{ $json.message ?? $('Webhook').item.json.body.content }}",
+              "type": "string"
+            },
+            {
+              "id": "b2c3dd5e-69d7-4ef7-8ac4-5365db66e6e1",
+              "name": "message_id",
+              "value": "={{ String($('Webhook').item.json.body.id) }}",
+              "type": "string"
+            },
+            {
+              "id": "96250393-34f6-4f8c-a85a-2edfe4d5471e",
+              "name": "timestamp",
+              "value": "={{ $('Webhook').item.json.body.conversation.timestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "d562280e-182c-42aa-9be2-9c22f879d9f7",
+              "name": "sender_name",
+              "value": "={{ $('Webhook').item.json.body.sender.name }}",
+              "type": "string"
+            },
+            {
+              "id": "8dbe5ea6-2d91-4113-80f6-a72f231bfe11",
+              "name": "message_type",
+              "value": "={{ $('Webhook').item.json.body.conversation.messages[0].message_type }}",
+              "type": "string"
+            },
+            {
+              "id": "fe6baf77-f048-47c3-9544-26f9b4f411f6",
+              "name": "historial",
+              "value": "=  {{ (() => {\n  const total = ($('get_historial_chatwoot').item.json.payload || []).filter(m => m.message_type === 0).length;\n  const limit = total <= 2 ? 3 : total <= 5 ? 6 : 10;\n  return ($('get_historial_chatwoot').item.json.payload || [])\n    .filter(m => (m.message_type === 0 || m.message_type === 1) && !m.private && m.content)\n    .slice(-limit)\n    .map(m => (m.message_type === 0 ? 'usuario' : 'bot') + ': ' + m.content)\n    .join('\\n');\n})() }}",
+              "type": "string"
+            },
+            {
+              "id": "b543fe4d-2bec-4c89-8915-7cec14c1c400",
+              "name": "total_mensajes",
+              "value": "={{ ($('get_historial_chatwoot').item.json.payload || []).filter(m => m.message_type === 0).length }}",
+              "type": "number"
+            },
+            {
+              "id": "44f7e9d9-65a4-40ad-b056-b744f4deb3d4",
+              "name": "conversation_id",
+              "value": "={{ $('Webhook').item.json.body.conversation.id }}",
+              "type": "string"
+            },
+            {
+              "id": "9a708b41-8426-47fd-a528-477881242c15",
+              "name": "account_id",
+              "value": "={{ $('Webhook').item.json.body.account.id }}",
+              "type": "string"
+            },
+            {
+              "id": "2c9f719f-3f39-406f-8c72-adfc80905e77",
+              "name": "sender_id",
+              "value": "={{ $('Webhook').item.json.body.sender.id }}",
+              "type": "string"
+            },
+            {
+              "id": "fcbf907d-ad1c-4809-a0ee-6321ad2d623f",
+              "name": "phone_number",
+              "value": "={{ $('Webhook').item.json.body.conversation.meta.sender.phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "36da1fa9-2807-488c-9164-540f68357a24",
+              "name": "inbox_id",
+              "value": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "type": "string"
+            },
+            {
+              "id": "6fbb00d0-8093-464f-a457-97688cc76a90",
+              "name": "user_identifier",
+              "value": "={{ $('Webhook').item.json.body.sender.identifier }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "ignoreConversionErrors": true
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1104,
+        576
+      ],
+      "id": "49fd4d40-2771-49b2-823d-57fc55d75cf6",
+      "name": "preparar_input_subflujo",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HXHiYlIxScQTPIu5",
+          "cachedResultUrl": "/workflow/HXHiYlIxScQTPIu5",
+          "cachedResultName": "first_message"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone-number": "={{ $node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"sender\"][\"phone_number\"]  || $node[\"Webhook\"].json[\"body\"][\"sender\"][\"phone_number\"] }}",
+            "sender_id": "={{ $node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"sender_id\"] }}",
+            "user_id": "={{ $node[\"Webhook\"].json[\"body\"][\"conversation\"][\"meta\"][\"sender\"][\"identifier\"] }}",
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"conversation_id\"] }}"
+          },
+          "matchingColumns": [
+            "info_chatwoot"
+          ],
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "phone-number",
+              "displayName": "phone-number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sender_id",
+              "displayName": "sender_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -2944,
+        576
+      ],
+      "id": "f0d5009d-7403-41a5-b880-e60342a5a240",
+      "name": "FIRST MESSAGE",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "lykh8TS8kjCU5u6b",
+          "cachedResultUrl": "/workflow/lykh8TS8kjCU5u6b",
+          "cachedResultName": "buffer_memory"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -896,
+        576
+      ],
+      "id": "531497d1-9b61-419d-ae28-9d26d8e19ecb",
+      "name": "redis"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "es"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d29efd09-687b-49a1-aa30-0fc2ebc52645",
+      "name": "Whisper Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1824,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const whisperResponse = $input.first().json;\nconst transcripcion = (whisperResponse.text || '').trim();\nconst captionUsuario = ($('Webhook').item.json.body.content || '').trim();\n\nlet mensajeFinal = transcripcion.length > 0\n  ? `[Audio transcrito] ${transcripcion}`\n  : '[Audio recibido pero no se pudo transcribir]';\n\nif (captionUsuario) {\n  mensajeFinal += `\\n[Texto del cliente] ${captionUsuario}`;\n}\n\nreturn [{\n  json: {\n    message: mensajeFinal,\n    transcripcion_raw: transcripcion\n  }\n}];"
+      },
+      "id": "0e3d0175-7a5a-4738-9fac-81c91c7b52a7",
+      "name": "Inyectar Transcripción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1600,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CONSTRUIR PROMPT OCR PARA COMPROBANTE DE TRANSFERENCIA\nconst webhookBody = $('Webhook').item.json.body;\nconst captionUsuario = (webhookBody.content || '').trim();\n\n// Imagen ya descargada por HTTP Request anterior\nconst binaryData = $input.first().binary.data;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst imageBase64 = buffer.toString('base64');\nconst mediaType = $input.first().binary.data.mimeType || 'image/jpeg';\n\n// System prompt: especialista en lectura de comprobantes\nconst systemPrompt = `You are an OCR assistant specialized in reading bank transfer receipts (Mexican banks: BBVA, Santander, Banorte, Banco Azteca, HSBC, Citibanamex, Scotiabank, etc.).\n\nFirst, determine if the image is a bank transfer receipt or not.\n\nIf it is NOT a bank transfer receipt, return ONLY this JSON:\n{\"is_receipt\": false, \"image_description\": \"<brief description in Spanish>\"}\n\nIf it IS a bank transfer receipt, return ONLY this JSON with the extracted data:\n{\n  \"is_receipt\": true,\n  \"origin_bank\": \"<string or null>\",\n  \"origin_account\": \"<string or null>\",\n  \"destination_bank\": \"<string or null>\",\n  \"destination_account\": \"<string or null>\",\n  \"beneficiary\": \"<string or null>\",\n  \"datetime\": \"<YYYY-MM-DD HH:MM or null>\",\n  \"amount\": <number or null>,\n  \"fee\": <number or null>,\n  \"concept\": \"<string or null>\",\n  \"reference\": \"<string or null>\",\n  \"transaction_id\": \"<string or null>\",\n  \"tracking_key\": \"<string or null>\",\n  \"transaction_type\": \"<SPEI | TRANSFER | DEPOSIT | OTHER or null>\",\n  \"low_confidence_fields\": [\"<field_name>\", ...]\n}\n\nSTRICT RULES:\n- datetime format: YYYY-MM-DD HH:MM (24hr, no a.m./p.m., no month names)\n- amounts: numeric only, no $ symbol, no thousands separator (use 1234.56 not 1,234.56)\n- if a field is not visible or unreadable, use null (NOT empty string, NOT 0)\n- low_confidence_fields: array of field names where you had to guess due to blur, cropping, or partial visibility\n- Return ONLY the raw JSON, no explanation, no markdown backticks`;\n\n// User message: incluye el caption del cliente si lo hubo\nconst userText = captionUsuario\n  ? `Extract the data from this receipt.\\n\\nNote: the customer wrote this along with the image: \"${captionUsuario}\"`\n  : 'Extract the data from this receipt.';\n\n// Body para Claude API con base64\nconst claudeBody = {\n  model: \"claude-sonnet-4-6\",\n  max_tokens: 1024,\n  system: systemPrompt,\n  messages: [{\n    role: \"user\",\n    content: [\n      {\n        type: \"image\",\n        source: {\n          type: \"base64\",\n          media_type: mediaType,\n          data: imageBase64\n        }\n      },\n      { type: \"text\", text: userText }\n    ]\n  }]\n};\n\nreturn [{\n  json: {\n    sender_id: webhookBody.sender.id,\n    sender_phone: webhookBody.sender.phone_number,\n    sender_name: webhookBody.sender.name,\n    conversation_id: webhookBody.conversation.id,\n    caption_usuario: captionUsuario,\n    claude_request_body: claudeBody\n  }\n}];"
+      },
+      "id": "1986000d-bba2-49c5-9204-91d38f8bc725",
+      "name": "Construir Prompt Vision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1824,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst rawText = (claudeResponse.content?.[0]?.text || '').trim();\nconst captionUsuario = $('Construir Prompt Vision').first().json.caption_usuario || '';\n\n// Limpia posibles fences de markdown\nconst cleaned = rawText\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  parsed = {\n    is_receipt: false,\n    image_description: '[error parseando respuesta de Claude]',\n    _parse_error: true,\n    _raw_text: rawText\n  };\n}\n\nconst isReceipt = parsed.is_receipt === true || parsed.is_receipt === 'true';\n\nlet mensajeFinal;\nif (isReceipt) {\n  const lines = [\n    `[Comprobante de transferencia recibido]`,\n    `- Banco origen: ${parsed.origin_bank ?? 'no leído'}`,\n    `- Cuenta origen: ${parsed.origin_account ?? 'no leído'}`,\n    `- Banco destino: ${parsed.destination_bank ?? 'no leído'}`,\n    `- CLABE destino: ${parsed.destination_account ?? 'no leído'}`,\n    `- Beneficiario: ${parsed.beneficiary ?? 'no leído'}`,\n    `- Monto: ${parsed.amount ?? 'no leído'}`,\n    `- Fecha: ${parsed.datetime ?? 'no leído'}`,\n    `- Concepto: ${parsed.concept ?? 'sin concepto'}`,\n    `- Referencia: ${parsed.reference ?? 'no leído'}`,\n    `- Folio: ${parsed.transaction_id ?? 'no leído'}`,\n    `- Clave de rastreo: ${parsed.tracking_key ?? 'no leído'}`,\n    `- Tipo: ${parsed.transaction_type ?? 'no especificado'}`,\n  ];\n  if (parsed.low_confidence_fields?.length > 0) {\n    lines.push(`- Campos con baja confianza: ${parsed.low_confidence_fields.join(', ')}`);\n  }\n  mensajeFinal = lines.join('\\n');\n} else {\n  mensajeFinal = `[Imagen recibida que NO es comprobante: ${parsed.image_description ?? 'sin descripción'}]`;\n}\n\nif (captionUsuario) {\n  mensajeFinal += `\\n[Texto del cliente] ${captionUsuario}`;\n}\n\nreturn [{\n  json: {\n    message: mensajeFinal,\n    receipt_data: parsed\n  }\n}];"
+      },
+      "id": "8fcea7ee-c1cd-432f-a290-f1dbb9da4820",
+      "name": "Inyectar Descripción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0f8c8352-a725-4a12-a805-19c4fcae813d",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.messages[0].message_type }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4576,
+        864
+      ],
+      "id": "c562434c-9dcb-49ac-a4f0-76a3f75cdc55",
+      "name": "filter_0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1363e636-f936-4641-a596-167ef8ccc925",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "a325795a-955f-4e63-917e-161dc2c219d1",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "784b80af-dece-4a74-abb7-aa4477efa4b3",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "rightValue": 40,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "08f27d24-eda0-449d-8a9b-5e8d24197f03",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "rightValue": 58,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4080,
+        832
+      ],
+      "id": "d16bacfa-b587-456f-b083-f8ee55352e69",
+      "name": "channel_filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Sintaxis correcta para nodo Code en n8n\nconst item = $('Webhook').first().json;\n\n// Leer el mensaje desde la ruta correcta del webhook\nconst rawMessage = (\n  item?.body?.conversation?.messages?.[0]?.content ||\n  item?.body?.processed_message_content ||\n  item?.body?.message ||\n  item?.body?.content ||\n  item?.processed_message_content ||\n  item?.message ||\n  item?.content ||\n  ''\n).toString().trim();\n\n// ---------- helper de normalización ----------\nfunction normalize(s) {\n  return s\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[¡!¿?.,;:\"'`´()\\[\\]{}]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst msgNorm = normalize(rawMessage);\n\n// ---------- 1. Marcadores de media: jamás son quick reply ----------\nconst tieneMarcadorMedia =\n  rawMessage.includes('[Comprobante de transferencia') ||\n  rawMessage.includes('[Imagen recibida') ||\n  rawMessage.includes('[Texto del cliente]') ||\n  rawMessage.includes('[Audio');\n\nif (tieneMarcadorMedia) {\n  return [{\n    json: {\n      ...item,\n      quick_reply_action: 'continue',\n      quick_reply_intent: null,\n      quick_reply_motivo: 'tiene marcador de media',\n    },\n  }];\n}\n\n// ---------- 2. Quick replies que CIERRAN la conversación ----------\nconst qr_close = new Set([\n  'hoy pago',\n  'manana pago',\n  'gracias por el aviso',\n  'todo bien',\n  'manana hago mi pago',\n  'gracias todo bien',\n  'pagare a tiempo',\n  'continuar'\n]);\n\nif (qr_close.has(msgNorm)) {\n  return [{\n    json: {\n      ...item,\n      quick_reply_action: 'close',\n      quick_reply_intent: null,\n      quick_reply_motivo: `boton QR close: \"${msgNorm}\"`,\n    },\n  }];\n}\n\n// ---------- 3. Texto corto de acuse (close) ----------\n// Filtro por palabras, no por caracteres, para evitar falsos positivos\nconst wordCount = msgNorm.split(' ').filter(w => w.length > 0).length;\nconst esCorto = wordCount <= 3;\n\n// const texto_close = new Set([\n//   'ok', 'okay', 'oki', 'okey', 'okas',\n//   'listo', 'perfecto', 'excelente', 'entendido', 'enterado',\n//   'de acuerdo', 'gracias', 'muchas gracias', 'ok gracias', 'okay gracias',\n//   'perfecto gracias', 'mil gracias', 'gracias por avisar', 'gracias por el aviso',\n//   'si gracias', 'claro gracias', 'ok muchas gracias',\n// ]);\n\n// if (esCorto && texto_close.has(msgNorm)) {\n//   return [{\n//     json: {\n//       ...item,\n//       quick_reply_action: 'close',\n//       quick_reply_intent: null,\n//       quick_reply_motivo: `acuse corto: \"${msgNorm}\"`,\n//     },\n//   }];\n// }\n\n// ---------- 4. Quick replies con intent pre-clasificado (continue) ----------\nconst qr_con_intent = {\n  // PAYMENT_HELP\n  'ayuda con mi pago':    'PAYMENT_HELP',\n  'ayuda pago':           'PAYMENT_HELP',\n  'ayuda, hoy pago':      'PAYMENT_HELP',\n  'ayuda, manana pago':   'PAYMENT_HELP',\n  'ayuda hoy pago':       'PAYMENT_HELP',\n  'ayuda pago manana':    'PAYMENT_HELP',\n  'ayuda pago en 2 dias': 'PAYMENT_HELP',\n  'retomar pagos':        'PAYMENT_HELP',\n  'opciones de pago':     'PAYMENT_HELP',\n  'ayuda con mi deuda':   'PAYMENT_HELP',\n  'quiero retomar pagos': 'PAYMENT_HELP',\n  'quiero pagar':         'PAYMENT_HELP',\n  'problemas para pagar': 'PAYMENT_HELP',\n  // SKIP_PAYMENT\n  'ayuda para aplazar':   'SKIP_PAYMENT',\n  'ayuda aplazamiento':   'SKIP_PAYMENT',\n  'ayuda aplazar':        'SKIP_PAYMENT',\n  'ayuda oferta aplazar': 'SKIP_PAYMENT',\n  // PROMISE_TO_PAY\n  'promesa de pago':      'PROMISE_TO_PAY',\n  'ayuda con promesa':    'PROMISE_TO_PAY',\n  // DISCOUNT\n  'hoy pago con oferta':  'DISCOUNT',\n  'ayuda con oferta':     'DISCOUNT',\n  'ayuda ofer':           'DISCOUNT',\n  // RENEWAL\n  'activar renovacion':   'RENEWAL',\n  'disponer ahora':       'RENEWAL',\n};\n\nconst intentMatch = qr_con_intent[msgNorm];\nif (intentMatch) {\n  return [{\n    json: {\n      ...item,\n      quick_reply_action: 'continue',\n      quick_reply_intent: intentMatch,\n      quick_reply_motivo: `QR con intent: \"${msgNorm}\" → ${intentMatch}`,\n    },\n  }];\n}\n\n// ---------- 5. Default: pasa al orquestador sin intent ----------\nreturn [{\n  json: {\n    ...item,\n    quick_reply_action: 'continue',\n    quick_reply_intent: null,\n    quick_reply_motivo: 'texto libre — sin match de QR',\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3632,
+        832
+      ],
+      "id": "7800aa15-8d61-4d4c-9aec-bb1947fad087",
+      "name": "quick_reply"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "10eac658-bbc8-43de-a14a-e66d6400a042",
+              "leftValue": "={{ $json.quick_reply_action }}",
+              "rightValue": "close",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3424,
+        832
+      ],
+      "id": "81e9f3ef-1f98-4fa8-8ace-62ebc5c50000",
+      "name": "QK?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3042409-016c-4f84-878e-eb5514a9ef91",
+              "leftValue": "={{ \n  $('Webhook').item.json.body.event === 'message_created'\n  && ($('Webhook').item.json.body.message_type === 'incoming' \n      || $('Webhook').item.json.body.conversation.messages[0].message_type === 0\n      || $('Webhook').item.json.body.conversation.messages[0].message_type === 'incoming')\n  && $('Webhook').item.json.body.conversation.first_reply_created_at == null\n  && $('Webhook').item.json.body.conversation.unread_count === 1\n}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "ecc28fcb-ee52-4c0b-82a8-a1b23cad9523",
+              "leftValue": "={{   (    $('Webhook').item.json.body.event === 'message_created'    && $('Webhook').item.json.body.conversation.first_reply_created_at == null    && $('Webhook').item.json.body.conversation.unread_count === 1  )  || ($input.first().json.payload || []).filter(m => m.message_type === 0).length === 1}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "8174d5f3-b4e3-4cc6-aa22-2f48cb760d44",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.messages[0].message_type }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3120,
+        848
+      ],
+      "id": "7b89c83c-c20c-4df8-b16c-ef5c611eb86b",
+      "name": "IF_first_message",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $item(\"0\").$node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"conversation_id\"] }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"resolved\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3200,
+        448
+      ],
+      "id": "249de687-16e5-4795-b31b-f6e55cbe0f3b",
+      "name": "Close_conversations_chatwoot"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "de1cca33-37c9-4270-a99c-4bf2f5ae2708",
+              "leftValue": "={{ ($json.payload || []).includes('ops-agent') || ($node[\"Webhook\"].json.body.conversation.labels || []).includes('ops-agent') }}",
+              "rightValue": "ops-agent",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "860902a0-5be6-4316-b23c-a531618c4ba2",
+              "leftValue": "={{ $item(\"0\").$node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"conversation\"][\"assignee_id\"] }}",
+              "rightValue": 26,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2800,
+        864
+      ],
+      "id": "cb53e315-8a70-4dee-95e8-ea2eec2379fa",
+      "name": "IF_ops-agent"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Webhook').item.json.body.conversation.messages[0].attachments[0].data_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2096,
+        496
+      ],
+      "id": "7b817b85-8097-4641-8176-a3b78d000f26",
+      "name": "HTTP audio"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Webhook').item.json.body.conversation.messages[0].attachments[0].data_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2096,
+        704
+      ],
+      "id": "1966204c-f690-43a4-b84f-42e9266b116b",
+      "name": "HTTP img"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $item(\"0\").$node[\"Construir Prompt Vision\"].json[\"claude_request_body\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1584,
+        704
+      ],
+      "id": "0e6dbc9f-8ce6-40a1-869f-38746fd4b108",
+      "name": "claude_respuesta_primer_mensaje",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $('Webhook').item.json.body.content || '';\n\n// Extraer la URL del patrón de Kapso\nconst urlMatch = content.match(/URL:\\s*(https?:\\/\\/\\S+)/i);\nconst imageUrl = urlMatch ? urlMatch[1] : null;\n\n// Extraer el nombre del archivo\nconst nameMatch = content.match(/Image attached \\(([^)]+)\\)/i);\nconst fileName = nameMatch ? nameMatch[1] : 'image.jpeg';\n\n// Detectar el tipo MIME\nconst typeMatch = content.match(/Type:\\s*(image\\/\\w+)/i);\nconst mimeType = typeMatch ? typeMatch[1] : 'image/jpeg';\n\nif (!imageUrl) {\n  throw new Error('No se pudo extraer la URL de la imagen de Kapso: ' + content);\n}\n\nreturn [{\n  json: {\n    kapso_image_url: imageUrl,\n    kapso_file_name: fileName,\n    kapso_mime_type: mimeType,\n    // Simulamos el formato que espera el resto del flujo\n    body: {\n      ...$('Webhook').item.json.body,\n      conversation: {\n        ...$('Webhook').item.json.body.conversation,\n        messages: [\n          {\n            ...$('Webhook').item.json.body.conversation.messages[0],\n            attachments: [{\n              file_type: 'image',\n              data_url: imageUrl\n            }]\n          }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2192,
+        976
+      ],
+      "id": "2a5d742a-4ed3-49f1-94fe-b422fdc8cce1",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.kapso_image_url ?? $('Webhook').item.json.body.conversation.messages[0].attachments[0].data_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2000,
+        976
+      ],
+      "id": "e4527385-14e7-4d94-997f-64f663ebab85",
+      "name": "HTTP img1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $item(\"0\").$node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"attachments\"][\"0\"][\"file_type\"] }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "66d89df2-8f30-49b3-90e9-7e1a6984a3ec"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "df39e692-497b-4224-9a57-c349ca8bd761",
+                    "leftValue": "={{ $item(\"0\").$node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"attachments\"][\"0\"][\"file_type\"] }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Webhook').item.json.body.content_type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "ac5dd2ca-c491-4204-94e0-a7532b227186"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "f3aee4dc-20c4-4121-912a-4c568a286223",
+                    "leftValue": "={{ $('Webhook').item.json.body.content }} ",
+                    "rightValue": "Image attached",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "KAPSO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "69521c81-6301-4db9-b007-c11299d1f498",
+      "name": "Switch Tipo Mensaje1",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -2416,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 780626678,
+          "mode": "list",
+          "cachedResultName": "TCC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $item(\"0\").$node[\"Webhook\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"conversation_id\"] }}",
+            "fecha": "={{ $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd') }}",
+            "tipo_cierre": "QUICK_REPLY"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo_cierre",
+              "displayName": "tipo_cierre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -3200,
+        256
+      ],
+      "id": "71234374-0458-4e0c-8d0f-e267304b2a22",
+      "name": "Append row in sheet1",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f9fe2911-9eb3-478d-887e-d76402a3c31f",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.contact_inbox.inbox_id }}",
+              "rightValue": 58,
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4336,
+        848
+      ],
+      "id": "27dfb0ca-6a66-4d2b-b4ca-6bba20ff1a21",
+      "name": "If",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "from": "={{ $env.TWILIO_FROM_NUMBER }}",
+        "to": "={{ $item(\"0\").$node[\"filter_0\"].json[\"body\"][\"conversation\"][\"messages\"][\"0\"][\"sender\"][\"phone_number\"] }}",
+        "message": "=Hola, te escribe FinDemo 👋 Nuestro número 55 1111 1111 dejó de estar disponible y no podemos responder tus mensajes ahí. Para cualquier duda o seguimiento, contáctanos por WhatsApp al +52 55 0000 0000. Guarda este número para futuras consultas. ¡Gracias!",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -4160,
+        1008
+      ],
+      "id": "e8de2989-b49e-4d84-a417-e929fd8e4010",
+      "name": "Send an SMS/MMS/WhatsApp message",
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "filter_0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_historial_chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Switch Tipo Mensaje1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_input_subflujo": {
+      "main": [
+        [
+          {
+            "node": "redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FIRST MESSAGE": {
+      "main": [
+        [
+          {
+            "node": "IF_ops-agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis": {
+      "main": [
+        []
+      ]
+    },
+    "Whisper Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Inyectar Transcripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inyectar Transcripción": {
+      "main": [
+        [
+          {
+            "node": "preparar_input_subflujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir Prompt Vision": {
+      "main": [
+        [
+          {
+            "node": "claude_respuesta_primer_mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inyectar Descripción": {
+      "main": [
+        [
+          {
+            "node": "preparar_input_subflujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_0": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "channel_filter": {
+      "main": [
+        [
+          {
+            "node": "quick_reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "quick_reply": {
+      "main": [
+        [
+          {
+            "node": "QK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QK?": {
+      "main": [
+        [
+          {
+            "node": "Close_conversations_chatwoot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF_first_message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_first_message": {
+      "main": [
+        [
+          {
+            "node": "FIRST MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF_ops-agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF_ops-agent": {
+      "main": [
+        [
+          {
+            "node": "get_historial_chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP audio": {
+      "main": [
+        [
+          {
+            "node": "Whisper Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP img": {
+      "main": [
+        [
+          {
+            "node": "Construir Prompt Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "claude_respuesta_primer_mensaje": {
+      "main": [
+        [
+          {
+            "node": "Inyectar Descripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP img1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Tipo Mensaje1": {
+      "main": [
+        [
+          {
+            "node": "HTTP audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP img",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "preparar_input_subflujo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP img1": {
+      "main": [
+        [
+          {
+            "node": "Construir Prompt Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close_conversations_chatwoot": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "channel_filter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send an SMS/MMS/WhatsApp message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "gdyDb7rUp7BMUzgG",
+  "active": false
+}

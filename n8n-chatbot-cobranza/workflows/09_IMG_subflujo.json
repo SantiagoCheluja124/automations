@@ -1,0 +1,243 @@
+{
+  "name": "IMG_subflujo",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -240,
+        352
+      ],
+      "id": "c7b750dc-59ff-4fff-ae36-ca6579303d8a",
+      "name": "ejecutar_query_dinamico1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PARSEAR COMPROBANTE + CONSTRUIR QUERY SQL\n// ============================================\n// Toma el texto formateado del OCR previo, extrae los campos\n// relevantes (CLABE, datetime, monto, etc.) y arma el query\n// dinámico para validar el pago contra loan_payments.\n// ============================================\n\nconst mensaje = $input.first().json.mensaje || $input.first().json.message || '';\nconst identifier = $('Webhook').item.json.user_identifier;\n\n// === 1. Detectar si el mensaje es un comprobante ===\nconst isReceipt = mensaje.includes('[Comprobante de transferencia recibido]');\n\n// Si no es comprobante, devolver bandera y salir\nif (!isReceipt) {\n  return [{\n    json: {\n      ocr_data: { is_receipt: false },\n      clabe: '',\n      datetime: '',\n      amount: 0,\n      clabe_length: 0,\n      caption_usuario: '',\n      query: null,\n      found: false,\n      skip_reason: 'no_es_comprobante'\n    }\n  }];\n}\n\n// === 2. Helpers ===\nfunction extractField(text, label) {\n  const regex = new RegExp(`-\\\\s*${label}:\\\\s*(.+?)(?:\\\\n|$)`, 'i');\n  const match = text.match(regex);\n  if (!match) return null;\n  const value = match[1].trim();\n  if (/^no le[ií]do$/i.test(value) || /^no detectado$/i.test(value) || value === '') {\n    return null;\n  }\n  return value;\n}\n\nfunction normaliceClabe(raw) {\n  const digits = (raw || '').replace(/\\D/g, '');\n  if (digits.startsWith('4000') && digits.length === 22) return digits.slice(-18);\n  if (digits.startsWith('400') && digits.length === 21) return digits.slice(-18);\n  if (digits.length > 18) return digits.slice(-18);\n  return digits;\n}\n\n// === 3. Extraer campos del texto formateado ===\nconst captionMatch = mensaje.match(/\\[Texto del cliente\\]\\s*([\\s\\S]*?)$/);\nconst captionUsuario = captionMatch ? captionMatch[1].trim() : '';\n\nconst origin_bank        = extractField(mensaje, 'Banco origen');\nconst destination_bank   = extractField(mensaje, 'Banco destino');\nconst beneficiary        = extractField(mensaje, 'Beneficiario');\nconst amountRaw          = extractField(mensaje, 'Monto');\nconst datetime           = extractField(mensaje, 'Fecha') || '';\nconst reference          = extractField(mensaje, 'Referencia');\nconst tracking_key       = extractField(mensaje, 'Clave de rastreo');\nconst destinationAccount = extractField(mensaje, 'CLABE destino'); // si lo agregaste en old_version\n\n// === 4. Normalizar CLABE y monto ===\n// Prioridad: CLABE destino > tracking_key (fallback)\nconst clabeRaw = destinationAccount || tracking_key;\nconst clabe = normaliceClabe(clabeRaw);\nconst clabeLength = clabe.length;\nconst amount = amountRaw ? parseFloat(amountRaw.toString().replace(/[^0-9.]/g, '')) : 0;\n\n// === 5. Validar que tenemos lo mínimo para hacer query ===\nif (!datetime || datetime.trim() === '' || !clabe || clabe.trim() === '') {\n  return [{\n    json: {\n      ocr_data: {\n        is_receipt: true,\n        origin_bank,\n        destination_bank,\n        beneficiary,\n        amount,\n        datetime,\n        reference,\n        tracking_key,\n        destination_account: destinationAccount\n      },\n      clabe,\n      datetime,\n      amount,\n      clabe_length: clabeLength,\n      caption_usuario: captionUsuario,\n      query: null,\n      found: false,\n      skip_reason: 'datos_insuficientes'\n    }\n  }];\n}\n\n// === 6. Construir query según longitud de CLABE ===\nlet query;\n\nif (clabeLength === 18) {\n  // CLABE completa: buscar match exacto en cualquier user\n  query = `\n    SELECT\n      lp.id,\n      up.user_id,\n      CASE\n        WHEN lp.paid_date > (lp.created_at AT TIME ZONE 'cst')\n          THEN (lp.created_at AT TIME ZONE 'cst')\n        ELSE lp.paid_date\n      END AS paid_date,\n      up.clabe AS bankprovider_clabe,\n      ac.clabe AS payprovider_clabe\n    FROM loan_payments AS lp\n    LEFT JOIN user_payment_accounts AS up ON up.user_id = lp.user_id\n    LEFT JOIN payprovider_customers AS ac ON lp.user_id = ac.user_id\n    WHERE\n      (up.clabe = '${clabe}' OR ac.clabe = '${clabe}')\n      AND (lp.paid_date AT TIME ZONE 'cst') >= (TIMESTAMP '${datetime}' AT TIME ZONE 'cst')\n    LIMIT 1\n  `;\n} else {\n  // CLABE parcial: usar LIKE y restringir al user_identifier\n  query = `\n    SELECT\n      lp.id,\n      up.user_id,\n      CASE\n        WHEN lp.paid_date > (lp.created_at AT TIME ZONE 'cst')\n          THEN (lp.created_at AT TIME ZONE 'cst')\n        ELSE lp.paid_date\n      END AS paid_date,\n      up.clabe AS bankprovider_clabe,\n      ac.clabe AS payprovider_clabe\n    FROM loan_payments AS lp\n    LEFT JOIN user_payment_accounts AS up ON up.user_id = lp.user_id\n    LEFT JOIN payprovider_customers AS ac ON lp.user_id = ac.user_id\n    WHERE\n      (up.clabe LIKE '%${clabe}' OR ac.clabe LIKE '%${clabe}')\n      AND (up.user_id = '${identifier}' OR ac.user_id = '${identifier}')\n      AND (lp.paid_date AT TIME ZONE 'cst') >= (TIMESTAMP '${datetime}' AT TIME ZONE 'cst')\n    LIMIT 1\n  `;\n}\n\n// === 7. Output combinado: OCR data + query listo ===\nreturn [{\n  json: {\n    // Data del comprobante (para nodos posteriores que la necesiten)\n    ocr_data: {\n      is_receipt: true,\n      origin_bank,\n      destination_bank,\n      beneficiary,\n      amount,\n      datetime,\n      reference,\n      tracking_key,\n      destination_account: destinationAccount\n    },\n    clabe,\n    datetime,\n    amount,\n    clabe_length: clabeLength,\n    caption_usuario: captionUsuario,\n    \n    // Query para el postgres node\n    query\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        560
+      ],
+      "id": "fb4fc5fb-65e8-4243-8e88-6c0211bc23e6",
+      "name": "parsear_ocr"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages",
+              "type": "number"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "image_url",
+              "type": "any"
+            },
+            {
+              "name": "sender_name"
+            },
+            {
+              "name": "message_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -864,
+        560
+      ],
+      "id": "bffe1b08-13d8-46ca-a4b9-7293b25c5501",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HbEUMo0jU5ibmXMC",
+          "cachedResultUrl": "/workflow/HbEUMo0jU5ibmXMC",
+          "cachedResultName": "event"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        544
+      ],
+      "id": "7f729035-f0f4-4ccc-a183-6af197bc7d7f",
+      "name": "Call 'event'"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CONSOLIDAR CONTEXTO PARA WORKFLOW `event`\n// ============================================\n// Toma el mensaje del comprobante (ya formateado por el OCR previo)\n// + resultado de validación en BD\n// y arma el context_block que `event` consumirá.\n// ============================================\n\n// === INPUTS ===\nconst webhook = $('Webhook').item.json;\nconst bdResult = $input.all(); // resultado de ejecutar_query_dinamico1\n\n// === MENSAJE Y METADATA ===\nconst mensaje = webhook.mensaje || webhook.message || '';\nconst historial = webhook.historial || '';\nconst sender_name = webhook.sender_name || 'Cliente';\nconst total_messages = webhook.total_messages || 0;\nconst conversation_id = webhook.conversation_id || '';\nconst phone_number = webhook.phone_number || '';\n\n// === DETECCIÓN DE COMPROBANTE Y CAPTION ===\nconst isReceipt = mensaje.includes('[Comprobante de transferencia recibido]');\n\n// Extraer el texto que el usuario escribió junto con la imagen\nconst captionMatch = mensaje.match(/\\[Texto del cliente\\]\\s*([\\s\\S]*?)$/);\nconst captionUsuario = captionMatch ? captionMatch[1].trim() : '';\n\n// === DETECCIÓN DE ESCALATE POR KEYWORDS ===\n// Solo evalúa el caption del cliente, no el bloque OCR\nconst captionLower = captionUsuario.toLowerCase();\nconst escalate_keywords = [\n  'humano', 'asesor', 'persona real', 'hablar con alguien',\n  'pésimo', 'pesimo', 'peor servicio', 'demand', 'abogado',\n  'denuncia', 'fraude', 'cancelar todo', 'ya no quiero'\n];\nconst should_escalate = escalate_keywords.some(k => captionLower.includes(k));\n\n// === BLOQUE DE COMPROBANTE ===\n// El texto del OCR ya viene formateado, lo usamos tal cual\nlet comprobanteBlock;\nif (isReceipt) {\n  // Tomamos solo la parte del comprobante (sin el caption del cliente)\n  const soloComprobante = captionMatch\n    ? mensaje.substring(0, captionMatch.index).trim()\n    : mensaje.trim();\n  comprobanteBlock = `=== COMPROBANTE OCR ===\\n${soloComprobante}`;\n} else {\n  comprobanteBlock = `=== COMPROBANTE OCR ===\\nLa imagen NO es un comprobante bancario válido.`;\n}\n\n// === VERIFICACIÓN EN BD ===\n// Normalizar el resultado de Postgres\n// n8n entrega: array de items, cada uno { json: { ... } }\n// Si no hubo filas, suele venir [{ json: {} }] (un solo item con objeto vacío)\nconst bdRows = (bdResult || [])\n  .map(item => item.json || item)\n  .filter(row => row && row.id !== undefined && row.id !== null);\n\nlet bdBlock;\nlet payment_diagnosis;\nlet loan_info = null;\n\nif (!isReceipt) {\n  bdBlock = `=== VERIFICACIÓN BD ===\\nNo se verificó en BD porque la imagen no es un comprobante.`;\n  payment_diagnosis = 'no_es_comprobante';\n} else if (bdRows.length === 0) {\n  bdBlock = `=== VERIFICACIÓN BD ===\nEl pago NO se encontró en nuestra base de datos.\nPosibles causas:\n- La CLABE es incorrecta o no corresponde a un cliente FinDemo.\n- El pago se hizo a una cuenta que no reconocemos.\n- Error en el OCR al leer la CLABE o la fecha.\n- La fecha del comprobante es anterior a cualquier pago registrado.`;\n  payment_diagnosis = 'pago_no_encontrado';\n} else {\n  loan_info = bdRows[0];\n  bdBlock = `=== VERIFICACIÓN BD ===\n- Loan ID: ${loan_info.id}\n- User ID: ${loan_info.user_id}\n- Fecha de pago registrada: ${loan_info.paid_date || 'aún no pagado'}\n- CLABE BankProvider: ${loan_info.bankprovider_clabe || 'no asignada'}\n- CLABE PayProvider: ${loan_info.payprovider_clabe || 'no asignada'}`;\n\n  payment_diagnosis = loan_info.paid_date\n    ? 'pago_ya_registrado'\n    : 'loan_encontrado_sin_pago';\n}\n\n// === CONTEXTO CONSOLIDADO ===\nconst context_block = `=== INFO CLIENTE ===\nNombre: ${sender_name}\nSender ID: ${webhook.sender_id || 'no disponible'}\nMensajes en este turno: ${total_messages}\n\n${comprobanteBlock}\n\n${bdBlock}\n\n=== DIAGNÓSTICO ===\n${payment_diagnosis}\n\n=== TEXTO DEL CLIENTE JUNTO CON LA IMAGEN ===\n${captionUsuario || '(no escribió nada, solo mandó la imagen)'}\n${should_escalate ? '\\nALERTA: El texto del cliente contiene señales de frustración o pedido de humano. Considera escalar.' : ''}`;\n\n// === OUTPUT ===\nreturn [{\n  json: {\n    // Campos que espera el workflow `event`\n    mensaje: mensaje,\n    historial: historial,\n    conversation_id: conversation_id,\n    total_messages: total_messages,\n    phone_number: phone_number,\n    route_type: 'ACTIVE_LOAN', // TODO: ajustar según lógica real\n    should_escalate: should_escalate,\n    context_block: context_block,\n\n    // Metadata útil por si `event` o downstream la necesitan\n    sender_id: webhook.sender_id,\n    sender_name: sender_name,\n    payment_diagnosis: payment_diagnosis,\n    is_receipt: isReceipt,\n    loan_found: loan_info !== null,\n    loan_id: loan_info ? loan_info.id : null,\n    user_id_bd: loan_info ? loan_info.user_id : null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        544
+      ],
+      "id": "47129b23-f708-4add-99e2-5f5000702edb",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "506a7944-6549-427f-8dc5-b918f095196e",
+              "leftValue": "={{ $node[\"parsear_ocr\"].json[\"ocr_data\"][\"is_receipt\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "a4b2aa81-6ef7-41e7-9d41-6fdae700345a",
+              "leftValue": "={{ $item(\"0\").$node[\"parsear_ocr\"].json[\"query\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -512,
+        560
+      ],
+      "id": "df2ac211-9766-478f-827f-d252e12f21a4",
+      "name": "If"
+    }
+  ],
+  "connections": {
+    "ejecutar_query_dinamico1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parsear_ocr": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "parsear_ocr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Call 'event'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "ejecutar_query_dinamico1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "cj38FHIhCcG5dNIy",
+  "active": false
+}

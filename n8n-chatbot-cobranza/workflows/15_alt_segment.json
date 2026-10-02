@@ -1,0 +1,313 @@
+{
+  "name": "alt_segment",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assignee_id",
+              "value": "={{ $item(\"0\").$node[\"code_asignar usuario\"].json[\"assignee_id\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        560,
+        0
+      ],
+      "id": "f3272d70-363d-4bf9-96da-87387fd3dca6",
+      "name": "asignar a un agente"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = [10, 8];\nconst selected = agents[Math.floor(Math.random() * agents.length)];\n\nreturn [{\n  json: {\n    ...$input.first().json,        // preserva todo el json original\n    assignee_id: selected\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        0
+      ],
+      "id": "12a25797-e6f9-4de5-8dc9-fc912b51086a",
+      "name": "code_asignar usuario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"status\": \"pending\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        752,
+        0
+      ],
+      "id": "befa7b0d-163e-4e87-bdbb-29b450d14ef8",
+      "name": "pending_conversacion_chatwoot1"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2019803709,
+          "mode": "list",
+          "cachedResultName": "asignaciones",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tipo_asignacion": "por_bot",
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "fecha ": "={{ $now.setZone('America/Mexico_City').toFormat('yyyy-MM-dd') }}",
+            "agente_id": "={{ $json[\"id\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha ",
+              "displayName": "fecha ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agente_id",
+              "displayName": "agente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo_asignacion",
+              "displayName": "tipo_asignacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        928,
+        704
+      ],
+      "id": "a5b28a8f-41d8-47cf-b18b-a6091e0c6eee",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "conversation_id"
+            },
+            {
+              "name": "usuario_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfcd9fa7-6818-4ec7-beaa-1969dd4b8090",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Webhook').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=content",
+              "value": "=Bienvenido, déjame conectarte con un asesor y en un momento te atenderán."
+            },
+            {
+              "name": "=message_type",
+              "value": "=outgoing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        368,
+        0
+      ],
+      "id": "e30e7e6e-07b1-46f0-aae9-9aa50383c236",
+      "name": "enviar_respuesta_directa"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"priority\": \"high\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        0
+      ],
+      "id": "9b8a52e8-8d33-4496-8db8-9cab7be53d34",
+      "name": "pending_conversacion_chatwoot"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"labels\": [\"alt_segment\"]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        560,
+        176
+      ],
+      "id": "04d2c811-3e0a-4dd6-85f3-dd6d7da496fc",
+      "name": "HTTP Request"
+    }
+  ],
+  "connections": {
+    "asignar a un agente": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code_asignar usuario": {
+      "main": [
+        [
+          {
+            "node": "enviar_respuesta_directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pending_conversacion_chatwoot1": {
+      "main": [
+        [
+          {
+            "node": "pending_conversacion_chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "code_asignar usuario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_respuesta_directa": {
+      "main": [
+        [
+          {
+            "node": "asignar a un agente",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pending_conversacion_chatwoot": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "WvCDn8RWrKPEvYOl",
+  "active": false
+}

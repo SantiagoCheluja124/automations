@@ -1,0 +1,576 @@
+{
+  "name": "PAID_OFF",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH tbd AS (\n    SELECT\n        json_array_elements(loan_options::json) AS loan_options,\n        row_number() OVER (PARTITION BY o.user_id ORDER BY o.created_at DESC) AS rn\n    FROM offers AS o\n    WHERE user_id = '{{ $('Webhook').item.json.user_identifier }}'\n)\nSELECT\n    MAX(((loan_options->>'loan_amount')::numeric)/100)::int AS max_loan_amount,\n    MAX(((loan_options->>'loan_term')::numeric))::int AS weeks,\n    MAX(((loan_options->>'booking_fee')::numeric)/100)::int AS booking_fee,\n    MAX(((loan_options->>'payment_amount')::numeric)/100)::int AS weekly_payment\nFROM tbd\nWHERE rn = 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -128,
+        80
+      ],
+      "id": "04d82478-e3c1-4992-beb5-3f24a3f26682",
+      "name": "get_daily_collections",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "mensaje"
+            },
+            {
+              "name": "historial"
+            },
+            {
+              "name": "total_messages"
+            },
+            {
+              "name": "conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "number"
+            },
+            {
+              "name": "contact_id",
+              "type": "number"
+            },
+            {
+              "name": "phone_number"
+            },
+            {
+              "name": "inbox_id",
+              "type": "number"
+            },
+            {
+              "name": "user_identifier"
+            },
+            {
+              "name": "route_type"
+            },
+            {
+              "name": "context_block"
+            },
+            {
+              "name": "base_context"
+            },
+            {
+              "name": "should_escalate"
+            },
+            {
+              "name": "daily_available"
+            },
+            {
+              "name": "message_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        80
+      ],
+      "id": "195aecb8-34fc-427b-aa09-8155e275b278",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "806affbb-8734-44a8-831e-e7a8c88775d4",
+              "name": "mensaje",
+              "value": "={{ $('Webhook').item.json.mensaje }}",
+              "type": "string"
+            },
+            {
+              "id": "0fb557ea-4228-4f3a-9d13-8657f6d65fd2",
+              "name": "historial",
+              "value": "={{ $('Webhook').item.json.historial }}",
+              "type": "string"
+            },
+            {
+              "id": "710c3240-f0b7-4d16-aa48-87e15de03f5b",
+              "name": "total_messages",
+              "value": "={{ $('Webhook').item.json.total_messages }}",
+              "type": "string"
+            },
+            {
+              "id": "7130f601-d01f-423c-93be-78ca0b8571f3",
+              "name": "conversation_id",
+              "value": "={{ $('Webhook').item.json.conversation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5cc3d4c9-966b-4556-afc0-6af694289b27",
+              "name": "account_id",
+              "value": "={{ $('Webhook').item.json.account_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2dde568d-7132-46e1-81c1-707850228d9b",
+              "name": "contact_id",
+              "value": "={{ $('Webhook').item.json.contact_id }}",
+              "type": "string"
+            },
+            {
+              "id": "9cba585f-6d59-401b-a7aa-1855033d8f92",
+              "name": "phone_number",
+              "value": "={{ $('Webhook').item.json.phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "4e46c807-7afe-446d-b9f0-7ff1e4545d3c",
+              "name": "inbox_id",
+              "value": "={{ $('Webhook').item.json.inbox_id }}",
+              "type": "string"
+            },
+            {
+              "id": "eba7ede0-2542-4f35-8c68-0ba370c3f242",
+              "name": "user_identifier",
+              "value": "={{ $('Webhook').item.json.user_identifier }}",
+              "type": "string"
+            },
+            {
+              "id": "031b16ca-2492-4ff7-a85f-aa8364cb261a",
+              "name": "route_type",
+              "value": "={{ $('preparar_contexto_paid_off').item.json.route_type }}",
+              "type": "string"
+            },
+            {
+              "id": "5d4c9a42-72fd-4035-b892-1832a0cc0a14",
+              "name": "context_block",
+              "value": "={{ $('preparar_contexto_paid_off').item.json.context_block }}",
+              "type": "string"
+            },
+            {
+              "id": "03a29a41-774c-4205-af02-8c4afcd638c9",
+              "name": "base_context",
+              "value": "={{ $('preparar_contexto_paid_off').item.json.base_context }}",
+              "type": "string"
+            },
+            {
+              "id": "b82d35a1-cfcc-40e9-9685-adede4ef94d3",
+              "name": "should_escalate",
+              "value": "={{ $('preparar_contexto_paid_off').item.json.should_escalate }}",
+              "type": "string"
+            },
+            {
+              "id": "d295f402-04c2-49b2-85c8-07e7b6fe08da",
+              "name": "daily_available",
+              "value": "={{ $('preparar_contexto_paid_off').item.json.daily_available }}",
+              "type": "string"
+            },
+            {
+              "id": "ea931d09-fa81-47d3-8af1-8e190b234333",
+              "name": "message_id",
+              "value": "={{ $item(\"0\").$node[\"Webhook\"].json[\"message_id\"] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        80
+      ],
+      "id": "d9348ddc-cd10-4f07-bd4d-c8705443a093",
+      "name": "preparar_input_event"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "CONFIGURE_ME",
+          "cachedResultName": "conversation_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "keyValue": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "should_escalate": "={{ $('preparar_contexto_paid_off').item.json.should_escalate }}",
+            "daily_available": "={{ $('preparar_contexto_paid_off').item.json.daily_available }}",
+            "conversation_id": "={{ $node[\"Webhook\"].json[\"conversation_id\"] }}",
+            "user_identifier": "={{ $('Webhook').item.json.user_identifier }}",
+            "phone_number": "={{ $('Webhook').item.json.phone_number }}",
+            "route_type": "={{ $('preparar_contexto_paid_off').item.json.route_type }}",
+            "base_context": "={{ $('preparar_contexto_paid_off').item.json.base_context }}",
+            "context_block": "={{ $('preparar_contexto_paid_off').item.json.context_block }}",
+            "last_refreshed_at": "={{ $now.toISO() }}",
+            "message_count": "={{ $node[\"Webhook\"].json[\"total_messages\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conversation_id",
+              "displayName": "conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_identifier",
+              "displayName": "user_identifier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "route_type",
+              "displayName": "route_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "should_escalate",
+              "displayName": "should_escalate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "daily_available",
+              "displayName": "daily_available",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "base_context",
+              "displayName": "base_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "context_block",
+              "displayName": "context_block",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_refreshed_at",
+              "displayName": "last_refreshed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "message_count",
+              "displayName": "message_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        -16
+      ],
+      "id": "2f84f808-cdd0-4eb5-8962-569521e9c9db",
+      "name": "Upsert row(s)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"labels\": {{ JSON.stringify($json.labels) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        -160
+      ],
+      "id": "564c85fe-d842-44bb-96a4-b3eff71b3980",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// MERGE DE ETIQUETAS\n// Conserva manuales + agrega las del bot\nconst armar = $('armar_etiquetas').item.json;\nconst nuevas = armar.labels_to_apply || [];\nconst ownedByBot = armar.bot_owned_labels || [];\n\nconst respuestaChatwoot = $('get_etiquetas_actuales').item.json;\nconst existentes = respuestaChatwoot.payload || [];\n\n// Manuales = las que NO están en el catálogo del bot\nconst manuales = existentes.filter(l => !ownedByBot.includes(l));\n\n// Final = manuales preservadas + nuevas del bot (dedup)\nconst final = [...new Set([...manuales, ...nuevas])];\n\nreturn [{\n  json: {\n    ...$json,\n    labels: final,\n    labels_preserved_manual: manuales,\n    labels_added_by_bot: nuevas\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -160
+      ],
+      "id": "204b5647-c278-4646-b918-5d8af4acdf9f",
+      "name": "merge_etiquetas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const daily = $('get_daily_collections').item.json;\nconst user = $('Webhook').item.json; // viene de CLASSIFICATION con datos del query principal\n\nconst labels = [];\n\n// === Estatus de cobranza (mutuamente excluyente) ===\nconst seg = (daily.coll_segment || '').toUpperCase();\nif (seg === 'REMINDER') {\n  labels.push('reminder');\n} else if (seg === 'PAYDAY') {\n  labels.push('payday');\n} else if (seg === 'DEFAULTER') {\n  labels.push('defaulter');\n  // DPD específico\n  const dpd = -daily.days_to_due_date; // si days_to_due_date = -2, dpd = 2\n  if (dpd === 1) labels.push('1_dpd');\n  else if (dpd === 2) labels.push('2_dpd');\n  else if (dpd === 3) labels.push('3_dpd');\n}\n\n// === Tipo de préstamo (mutuamente excluyente) ===\nconst loanType = (daily.loan_type || daily.application_type || '').toUpperCase();\nif (loanType === 'FT' || loanType === 'NEW') {\n  labels.push('ft');\n} else if (loanType === 'TU' || loanType === 'TOPUP') {\n  labels.push('tu');\n}\n\n// === Estados especiales (combinables) ===\nif (daily.active_promise) labels.push('promise_active');\nif (daily.refinanced) labels.push('refinance');\n\n// Skip: ajustar según defina el equipo de cobranza\nif (daily.skip_in_last_7_days || daily.pending_skip_activation) {\n  labels.push('skip_active');\n}\n\n// recent_disbursed solo si tienes disbursal_date en este contexto\n// (puede venir del query principal, no de daily)\n\nreturn [{ json: { ...$json, labels_to_apply: labels } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -160
+      ],
+      "id": "877eb431-1d63-4292-8c0e-ac33d7d0d0e5",
+      "name": "armar_etiquetas"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $node[\"Webhook\"].json[\"conversation_id\"] }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        272,
+        -160
+      ],
+      "id": "c9489a11-fabc-48d9-9988-8775811d00a9",
+      "name": "get_etiquetas_actuales"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Datos de la oferta del warehouse de producción\nconst offer = $input.first().json;\nconst baseContext = $('Webhook').item.json.base_context;\n\n// Verificar si hay oferta disponible\nconst hasOffer = offer && offer.max_loan_amount && offer.max_loan_amount > 0;\n\nlet contextBlock;\n\nif (hasOffer) {\n  const totalToPay = offer.weeks * offer.weekly_payment;\n  const totalToReceive = offer.max_loan_amount - offer.booking_fee;\n  \n  contextBlock = `CONTEXTO DEL CLIENTE (préstamo anterior LIQUIDADO)\n\nIdentidad:\n- Nombre: ${baseContext.first_name || 'no disponible'}\n- User ID: ${baseContext.user_id}\n- Email: ${baseContext.primary_email || 'no disponible'}\n- Último préstamo: ${baseContext.loan_number || 'n/a'} (liquidado)\n\nOferta de renovación disponible:\n- Monto máximo del nuevo préstamo: $${offer.max_loan_amount}\n- Plazo: ${offer.weeks} semanas\n- Pago semanal: $${offer.weekly_payment}\n- Total a pagar: $${totalToPay}\n- Booking fee (se transforma en cashback): $${offer.booking_fee}\n- Total a recibir (depositado): $${totalToReceive}\n\nEstado actual del proceso:\n- application_type: ${baseContext.application_type || 'sin nueva solicitud'}\n- credit_check_status: ${baseContext.credit_check_status || 'n/a'}\n- verification_status: ${baseContext.verification_status || 'n/a'}\n- signature: ${baseContext.signature !== null ? (baseContext.signature ? 'firmado' : 'pendiente') : 'n/a'}\n\nEste cliente ya liquidó su préstamo anterior y puede renovar. Guíalo hacia la app para que inicie su nueva solicitud si aún no lo ha hecho.`;\n\n} else {\n  // No hay oferta generada — cliente liquidado pero sin oferta lista\n  contextBlock = `CONTEXTO DEL CLIENTE (préstamo anterior LIQUIDADO — sin oferta de renovación)\n\nIdentidad:\n- Nombre: ${baseContext.first_name || 'no disponible'}\n- User ID: ${baseContext.user_id}\n- Email: ${baseContext.primary_email || 'no disponible'}\n- Último préstamo: ${baseContext.loan_number || 'n/a'} (liquidado)\n\nIMPORTANTE: Este cliente liquidó su préstamo pero aún no tiene una oferta de renovación generada. Puede ser porque:\n- Apenas liquidó y la oferta está por generarse\n- Su perfil no califica para renovación automática en este momento\n\nRespuesta sugerida: Felicitarlo por liquidar y pedirle que revise su app FinDemo en los próximos días. Si tiene dudas específicas sobre por qué no tiene oferta, escalar a un agente humano.`;\n}\n\nreturn [{\n  json: {\n    route_type: 'PAID_OFF',\n    daily_available: false,\n    has_offer: hasOffer,\n    context_block: contextBlock,\n    raw_offer: hasOffer ? offer : null,\n    base_context: baseContext,\n    should_escalate: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        80
+      ],
+      "id": "6c9ba87b-0588-467a-9eec-d9608929e6b0",
+      "name": "preparar_contexto_paid_off"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "HbEUMo0jU5ibmXMC",
+          "cachedResultUrl": "/workflow/HbEUMo0jU5ibmXMC",
+          "cachedResultName": "event"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [
+            "info"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -400,
+        -208
+      ],
+      "id": "96a6f7e8-fbb3-46fb-8883-fbffd51ebb87",
+      "name": "Call 'event'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "oDyev90Kbv6yIRNf",
+          "cachedResultUrl": "/workflow/oDyev90Kbv6yIRNf",
+          "cachedResultName": "clasificar_intencion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        96
+      ],
+      "id": "775146ff-3596-4968-8d11-ec720c42bb15",
+      "name": "clasf_intent"
+    }
+  ],
+  "connections": {
+    "get_daily_collections": {
+      "main": [
+        [
+          {
+            "node": "preparar_contexto_paid_off",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "armar_etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "get_daily_collections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_input_event": {
+      "main": [
+        [
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "clasf_intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert row(s)": {
+      "main": [
+        []
+      ]
+    },
+    "merge_etiquetas": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "armar_etiquetas": {
+      "main": [
+        [
+          {
+            "node": "get_etiquetas_actuales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_etiquetas_actuales": {
+      "main": [
+        [
+          {
+            "node": "merge_etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_contexto_paid_off": {
+      "main": [
+        [
+          {
+            "node": "preparar_input_event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "id": "F4ZXNT0VY64cf30o",
+  "active": false
+}
